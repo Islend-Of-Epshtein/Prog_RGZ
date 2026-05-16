@@ -1,0 +1,19 @@
+﻿<Window x:Class="SQL_WPF_App.FormDataView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Данные таблицы" Height="500" Width="800"
+        WindowStartupLocation="CenterScreen" Icon="/FormsIcon.ico">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10">
+            <Button Content="Добавить" Click="BtnAdd_Click" Width="100" Margin="0,0,10,0"/>
+            <Button Content="Изменить" Click="BtnEdit_Click" Width="100" Margin="0,0,10,0"/>
+            <Button Content="Удалить" Click="BtnDelete_Click" Width="100" Margin="0,0,10,0"/>
+            <Button Content="Обновить" Click="BtnRefresh_Click" Width="100" Margin="0,0,10,0"/>
+            <Button Content="Закрыть" Click="BtnClose_Click" Width="100"/>
+        </StackPanel>
+
+        <DataGrid x:Name="dgvData" AutoGenerateColumns="True" IsReadOnly="True" 
+                  RowHeaderWidth="0" SelectionMode="Single" Background="White"/>
+    </DockPanel>
+</Window>

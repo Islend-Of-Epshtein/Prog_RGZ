@@ -9,6 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="NumericUpDownProgressDataGridViewColumn">
+      <HintPath>..\..\..\.nuget\packages\numericupdownprogressdatagridviewcolumn\1.0.0-stable\build\net450\NumericUpDownProgressDataGridViewColumn.dll</HintPath>
+    </Reference>
     <Reference Include="SQL_ConsoleApp">
       <HintPath>..\SQL_ConsoleApp\bin\Debug\net8.0\SQL_ConsoleApp.dll</HintPath>
     </Reference>

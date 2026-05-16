@@ -1,0 +1,139 @@
+﻿<Window x:Class="SQL_WPF_App.FormCreateTable"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Интерпретатор SQL - создание таблицы" Height="370" Width="515"
+        WindowStartupLocation="CenterScreen" Icon="/FormsIcon.ico">
+    <DockPanel Background="#DEDEDE">
+        <Menu DockPanel.Dock="Top" Background="#E1E1E1" Height="25">
+            <MenuItem Header="Сохранить" Padding="15,2,10,0" Click="SaveButton_Click"/>
+            <MenuItem Header="Отменить" Padding="5,2,10,0" Click="CancelButton_Click"/>
+        </Menu>
+        <!-- DataGridView для результатов -->
+        <Grid Margin="15,10,10,5" DockPanel.Dock="Bottom">
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Имя таблицы и выбор регистра -->
+            <Grid Grid.Row="1" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="Auto" MinWidth="10"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+
+
+                <Label Content="Имя таблицы" HorizontalAlignment="Center" Padding="0" Width="74"/>
+                <TextBox x:Name="txtTableName" Grid.Column="1" Height="20" VerticalAlignment="Center" Margin="10,0,24,0" BorderBrush="#454545"/>
+
+                <ComboBox x:Name="cmbRegister" Grid.Column="2" Height="20" VerticalAlignment="Center" Margin="5,0,120,0" Grid.ColumnSpan="2"
+          Background="White" BorderBrush="#454545" BorderThickness="1" SelectedIndex="0">
+                    <ComboBox.Template>
+                        <ControlTemplate TargetType="ComboBox">
+                            <Grid>
+                                <ToggleButton x:Name="toggleButton"
+                                      Focusable="False"
+                                      ClickMode="Press"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border x:Name="border" 
+                                                Background="White" 
+                                                BorderBrush="#1C75A1" 
+                                                BorderThickness="1" Padding="2,1,0,2">
+                                                <Grid>
+                                                    <!-- Исправленный ContentControl -->
+                                                    <TextBlock x:Name="textBlock"
+                                                               Text="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                               Background="#0078D7"
+                                                               
+                                                               Foreground="White"
+                                                               Padding="0"
+                                                               VerticalAlignment="Center"
+                                                               HorizontalAlignment="Left"/>
+                                                    <Path x:Name="arrow" 
+                                                      Data="M 0 0 L 4 4 L 8 0" 
+                                                      Stroke="#454545" 
+                                                      StrokeThickness="1" 
+                                                      HorizontalAlignment="Right" 
+                                                      VerticalAlignment="Center" 
+                                                      Margin="5,0,5,0"/>
+                                                </Grid>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+
+                                <Popup x:Name="popup" 
+                       IsOpen="{Binding IsChecked, ElementName=toggleButton}" 
+                       Placement="Bottom" 
+                       AllowsTransparency="True">
+                                    <Border Background="White" 
+                            BorderBrush="#454545" 
+                            BorderThickness="1" 
+                            Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ScrollViewer>
+                                            <ItemsPresenter>
+                                                <ItemsPresenter.Resources>
+                                                    <Style TargetType="ComboBoxItem">
+                                                        <Setter Property="Background" Value="White"/>
+                                                        <Setter Property="Foreground" Value="Black"/>
+                                                        <Setter Property="Padding" Value="3,5"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter Property="Background" Value="#0078D7"/>
+                                                                <Setter Property="Foreground" Value="White"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ItemsPresenter.Resources>
+                                            </ItemsPresenter>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </ControlTemplate>
+                    </ComboBox.Template>
+                    <ComboBoxItem Content="Сохранить регистр"/>
+                </ComboBox>
+
+            </Grid>
+
+            <!-- Заголовки столбцов -->
+            <Grid Grid.Row="2" Margin="0,0,0,5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130"/>
+                    <ColumnDefinition Width="45"/>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="70"/>
+                    <ColumnDefinition Width="70"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Имя столбца" Grid.Column="0" />
+                <TextBlock Text="Тип" Grid.Column="1" />
+                <TextBlock Text="Длина" Grid.Column="2" />
+                <TextBlock Text="Точность" Grid.Column="3" />
+                <TextBlock Text="NOT NULL" Grid.Column="4" HorizontalAlignment="Left" />
+                <TextBlock Text="Позиция" Grid.Column="5" />
+            </Grid>
+
+            <!-- Список строк (ScrollViewer) -->
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,18,0,0">
+                <Border BorderBrush="#454545" BorderThickness="1" Padding="3,7,3,3">
+                    <StackPanel x:Name="rowsPanel">
+                        <!-- Сюда будут добавляться строки -->
+                    </StackPanel>
+                </Border>
+            </ScrollViewer>
+
+            <!-- Кнопка добавить столбец -->
+            <Button Content="Добавить столбец" Grid.Row="3" Click="AddColumnButton_Click" 
+            Height="30" Width="243" HorizontalAlignment="Right" Margin="0,10,0,0"/>
+        </Grid>
+    </DockPanel>
+</Window>

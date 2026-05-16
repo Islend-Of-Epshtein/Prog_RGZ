@@ -1,0 +1,26 @@
+﻿<Window x:Class="SQL_WPF_App.FormQuery"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Интерпретатор SQL - выполнение SQL-запроса" Height="600" Width="800"
+        WindowStartupLocation="CenterScreen" Icon="/FormsIcon.ico">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="200"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10">
+            <Button Content="Выполнить" Click="BtnExecute_Click" Width="100" Margin="0,0,10,0"/>
+            <Button Content="Очистить" Click="BtnClear_Click" Width="100" Margin="0,0,10,0"/>
+            <Button Content="Закрыть" Click="BtnClose_Click" Width="100"/>
+        </StackPanel>
+
+        <TextBox Grid.Row="1" x:Name="txtInput" VerticalScrollBarVisibility="Auto" 
+                 FontFamily="Consolas" FontSize="12" Margin="10" AcceptsReturn="True"/>
+
+        <DataGrid Grid.Row="2" x:Name="dgvOutput" AutoGenerateColumns="True" 
+                  IsReadOnly="True" RowHeaderWidth="0" Margin="10" Background="White"/>
+    </Grid>
+</Window>

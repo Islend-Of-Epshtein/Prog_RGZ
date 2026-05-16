@@ -20,7 +20,11 @@ namespace SQL_App
         private void InitializeComponent()
         {
             SuspendLayout();
-            ClientSize = new Size(800, 600);
+            // 
+            // Form1
+            // 
+            BackColor = SystemColors.ActiveCaption;
+            ClientSize = new Size(800, 25);
             Name = "Form1";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "Интерпретатор SQL";
@@ -47,16 +51,16 @@ namespace SQL_App
             ToolStripMenuItem exitItem = new ToolStripMenuItem("Выход");
             ToolStripMenuItem helpItem = new ToolStripMenuItem("?");
 
-            // Подменю Команды
-            commandsMenu.DropDownItems.Add(createItem);
-            commandsMenu.DropDownItems.Add(openItem);
-            commandsMenu.DropDownItems.Add(structureItem);
-            commandsMenu.DropDownItems.Add(shrinkItem);
-            commandsMenu.DropDownItems.Add(closeItem);
-            commandsMenu.DropDownItems.Add(dropItem);
-            commandsMenu.DropDownItems.Add(dataItem);
-            commandsMenu.DropDownItems.Add(queryItem);
-            commandsMenu.DropDownItems.Add(exitItem);
+            // ========== Создаём дубликаты для подменю "Команды" ==========
+            ToolStripMenuItem createItemMenu = new ToolStripMenuItem("Создать");
+            ToolStripMenuItem openItemMenu = new ToolStripMenuItem("Открыть");
+            ToolStripMenuItem structureItemMenu = new ToolStripMenuItem("Структура");
+            ToolStripMenuItem shrinkItemMenu = new ToolStripMenuItem("Сжать");
+            ToolStripMenuItem closeItemMenu = new ToolStripMenuItem("Закрыть");
+            ToolStripMenuItem dropItemMenu = new ToolStripMenuItem("Удалить");
+            ToolStripMenuItem dataItemMenu = new ToolStripMenuItem("Данные");
+            ToolStripMenuItem queryItemMenu = new ToolStripMenuItem("Запрос");
+            ToolStripMenuItem exitItemMenu = new ToolStripMenuItem("Выход");
 
             // Attach click events
             createItem.Click += CreateItem_Click;
@@ -69,9 +73,40 @@ namespace SQL_App
             queryItem.Click += QueryItem_Click;
             exitItem.Click += (s, e) => { _model.CloseTable(); Application.Exit(); };
             helpItem.Click += HelpItem_Click;
+            //ТЕ ЖЕ САМЫЕ
+            createItemMenu.Click += CreateItem_Click;
+            openItemMenu.Click += OpenItem_Click;
+            structureItemMenu.Click += StructureItem_Click;
+            shrinkItemMenu.Click += ShrinkItem_Click;
+            closeItemMenu.Click += CloseItem_Click;
+            dropItemMenu.Click += DropItem_Click;
+            dataItemMenu.Click += DataItem_Click;
+            queryItemMenu.Click += QueryItem_Click;
+            exitItemMenu.Click += (s, e) => { _model.CloseTable(); Application.Exit(); };
+
+            commandsMenu.DropDownItems.Add(createItemMenu);
+            commandsMenu.DropDownItems.Add(openItemMenu);
+            commandsMenu.DropDownItems.Add(structureItemMenu);
+            commandsMenu.DropDownItems.Add(shrinkItemMenu);
+            commandsMenu.DropDownItems.Add(closeItemMenu);
+            commandsMenu.DropDownItems.Add(dropItemMenu);
+            commandsMenu.DropDownItems.Add(dataItemMenu);
+            commandsMenu.DropDownItems.Add(queryItemMenu);
+            commandsMenu.DropDownItems.Add(exitItemMenu);
 
             menuStrip.Items.Add(commandsMenu);
+            menuStrip.Items.Add(createItem);
+            menuStrip.Items.Add(openItem);
+            menuStrip.Items.Add(structureItem);
+            menuStrip.Items.Add(shrinkItem);
+            menuStrip.Items.Add(closeItem);
+            menuStrip.Items.Add(dropItem);
+            menuStrip.Items.Add(dataItem);
+            menuStrip.Items.Add(queryItem);
+            menuStrip.Items.Add(exitItem);
             menuStrip.Items.Add(helpItem);
+
+            menuStrip.BackColor = Color.FromArgb(215, 228, 242);
 
             this.Controls.Add(menuStrip);
             this.MainMenuStrip = menuStrip;
@@ -85,9 +120,6 @@ namespace SQL_App
             dgvResult.RowHeadersVisible = false;
             dgvResult.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvResult.BackgroundColor = System.Drawing.Color.White;
-            dgvResult.Location = new System.Drawing.Point(0, menuStrip.Height);
-            dgvResult.Size = new System.Drawing.Size(this.ClientSize.Width, this.ClientSize.Height - menuStrip.Height);
-            dgvResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
 
             this.Controls.Add(dgvResult);
         }

@@ -17,7 +17,7 @@ namespace SQL_ConsoleApp.CLI
         public static void Run()
         {
             Console.WriteLine("SQL Interpreter");
-            Console.WriteLine("Type '/?' для вывода списка команд, 'EXIT;' для выхода");
+            Console.WriteLine("Type '/?' для вывода списка команд, 'EXIT;' для выхода\nвсе команды заканчиваются (;), кроме /?");
             Console.WriteLine();
 
             while (true)
@@ -32,7 +32,7 @@ namespace SQL_ConsoleApp.CLI
 
                 _commandBuffer.AppendLine(input);
 
-                if (!input.Trim().EndsWith(";"))
+                if (!input.Trim().EndsWith(";") && !input.Trim().Equals("/?"))
                 {
                     _waitingForMore = true;
                     continue;
