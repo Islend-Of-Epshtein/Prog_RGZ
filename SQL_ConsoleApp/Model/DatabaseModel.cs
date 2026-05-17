@@ -144,7 +144,11 @@ namespace SQL_ConsoleApp.Model
 
             throw new Exception("Неизвестная команда");
         }
-
+        public List<(string Name, char Type, int Length, int Precision, bool NotNull)> GetTableStructure(string tableName)
+        {
+            var manager = Files.TableManager.Open($"{tableName}.dbf");
+            return manager.GetFields();
+        }
         public void CloseTable()
         {
             if (_currentTable != null)

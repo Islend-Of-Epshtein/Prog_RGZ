@@ -36,7 +36,11 @@ namespace SQL_ConsoleApp.Files
             string value = _values[index];
             if (field.Type == 'M' && dbtManager != null)
                 return dbtManager.GetText(value);
-            return value.Trim();
+            if (field.Type == 'D' && dbtManager != null)
+            {
+                return value?.Insert(1, ".").Insert(4,".") ?? "";
+            }
+            return value?.Trim() ?? "";
         }
 
         public void SetValue(int index, string value, DbfField field, DbtManager dbtManager)
@@ -84,7 +88,7 @@ namespace SQL_ConsoleApp.Files
             if (field.Type == 'D')
             {
                 if (DateTime.TryParse(value, out DateTime date))
-                    return date.ToString("yyyyMMdd");
+                    return date.ToString("ddMMyyyy");
                 return "        ";
             }
 

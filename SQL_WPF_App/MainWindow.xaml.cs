@@ -1,5 +1,6 @@
 ﻿using SQL_ConsoleApp.Model;
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Windows;
 
@@ -85,13 +86,46 @@ namespace SQL_WPF_App
 
             try
             {
-                string result = _model.ExecuteCommand($"SELECT * FROM {_currentTableName};");
-                var form = new FormStructure(_currentTableName, result);
+                // Получаем структуру таблицы из DBF (включая NOT NULL)
+                var fields = _model.GetTableStructure(_currentTableName);
+                var form = new FormCreateTable(_currentTableName, fields);
+                form.TableStructureChanged += (newName, oldName, newRows) =>
+                {
+                    try
+                    {
+                        // Удаляем старую таблицу
+                        _model.ExecuteCommand($"DROP TABLE {oldName};");
+                        // Создаём новую с обновлённой структурой
+                        string createCmd = $"CREATE TABLE {newName} (";
+                        for (int i = 0; i < newRows.Length; i++)
+                        {
+                            var row = newRows[i];
+                            createCmd += $"{row.Name} {row.Type}";
+                            if (row.Type == 'C')
+                                createCmd += $"({row.Width})";
+                            else if (row.Type == 'N')
+                                createCmd += $"({row.Width},{row.Precision})";
+                            if (row.IsNotNull)
+                                createCmd += " NOT NULL";
+                            if (i < newRows.Length - 1)
+                                createCmd += ", ";
+                        }
+                        createCmd += ");";
+                        _model.ExecuteCommand(createCmd);
+                        _currentTableName = newName;
+                        MessageBox.Show($"Структура таблицы '{oldName}' изменена.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                        RefreshData();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                };
                 form.ShowDialog();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Ошибка загрузки структуры: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -187,7 +221,28 @@ namespace SQL_WPF_App
 
         private void HelpItem_Click(object sender, RoutedEventArgs e)
         {
-            string helpText = @"SQL Interpreter - Справка..."; // Ваш текст справки
+            string helpText = @"
+SQL Interpreter - Справка
+
+Команды:
+  CREATE TABLE <имя> (<поле1> <тип> [NOT NULL], ...);
+  OPEN <имя_файла>;
+  CLOSE;
+  ALTER TABLE <имя> COLUMN ADD <поле> <тип> [NOT NULL];
+  ALTER TABLE <имя> COLUMN REMOVE <поле>;
+  ALTER TABLE <имя> COLUMN RENAME <старое> <новое>;
+  INSERT INTO <имя> (<поля>) VALUE (<значения>);
+  UPDATE <имя> SET <поле>=<значение> [WHERE <условие>];
+  DELETE FROM <имя> [WHERE <условие>];
+  SELECT *|поля FROM <имя> [WHERE <условие>];
+  TRUNCATE <имя>;
+  RESTORE <имя> [WHERE <условие>];
+  DROP TABLE <имя>;
+  EXIT;
+
+Типы данных: C(n), D, L, M, N(n,d)
+Логические операторы: AND, OR, XOR, NOT
+";
             MessageBox.Show(helpText, "Справка", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
@@ -229,7 +284,6 @@ namespace SQL_WPF_App
                 if (values.Length == headers.Length)
                     dt.Rows.Add(values);
             }
-
             return dt;
         }
     }

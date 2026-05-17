@@ -44,27 +44,8 @@ namespace SQL_ConsoleApp.Commands
 
         private List<string> SplitValues(string valuesStr)
         {
-            var result = new List<string>();
-            int depth = 0;
-            int start = 0;
-            bool inQuotes = false;
-
-            for (int i = 0; i < valuesStr.Length; i++)
-            {
-                if (valuesStr[i] == '"')
-                    inQuotes = !inQuotes;
-                else if (!inQuotes && valuesStr[i] == '(')
-                    depth++;
-                else if (!inQuotes && valuesStr[i] == ')')
-                    depth--;
-                else if (!inQuotes && valuesStr[i] == ',' && depth == 0)
-                {
-                    result.Add(valuesStr.Substring(start, i - start));
-                    start = i + 1;
-                }
-            }
-            result.Add(valuesStr.Substring(start));
-
+            valuesStr.Replace("\"", "");
+            var result =valuesStr.Split(",").ToList();
             return result;
         }
     }

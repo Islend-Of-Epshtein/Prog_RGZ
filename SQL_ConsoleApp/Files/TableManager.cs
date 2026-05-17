@@ -85,7 +85,10 @@ namespace SQL_ConsoleApp.Files
         {
             return _header.Fields.Any(f => f.Type == 'M');
         }
-
+        public List<(string Name, char Type, int Length, int Precision, bool NotNull)> GetFields()
+        {
+            return _header.Fields.Select(f => (f.Name.TrimEnd('\0'), f.Type, f.Length, (int)f.DecimalCount, f.NotNull)).ToList();
+        }
         public int GetRecordCount() => _records.Count;
 
         public void Insert(List<string> columns, List<string> values)
@@ -95,7 +98,7 @@ namespace SQL_ConsoleApp.Files
             for (int i = 0; i < _header.Fields.Count; i++)
             {
                 var field = _header.Fields[i];
-                int colIndex = columns.FindIndex(c => c.Equals(field.Name, StringComparison.OrdinalIgnoreCase));
+                int colIndex = columns.FindIndex(c => c.Equals(field.Name.TrimEnd('\0'), StringComparison.OrdinalIgnoreCase));
 
                 if (colIndex >= 0)
                 {
@@ -312,6 +315,7 @@ namespace SQL_ConsoleApp.Files
 
             var selectedRecords = _records.Where(r => !r.IsDeleted);
 
+            
             if (parser != null)
                 selectedRecords = selectedRecords.Where(r => parser.Evaluate(r.ToDictionary(_header.Fields)));
 

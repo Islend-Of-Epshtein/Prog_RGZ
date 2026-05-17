@@ -1,8 +1,8 @@
-﻿using System;
+﻿using SQL_ConsoleApp.Commands;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using SQL_ConsoleApp.Commands;
 
 namespace SQL_ConsoleApp.Files
 {
@@ -40,8 +40,7 @@ namespace SQL_ConsoleApp.Files
                 {
                     Name = row.Name.PadRight(11, '\0'),
                     Type = row.Type,
-                    Length = row.Type == 'C' ? row.Width :
-                             row.Type == 'N' ? row.Width : 1,
+                    Length = row.Type == 'C' ? row.Width : (row.Type == 'N' ? row.Width : 1),
                     DecimalCount = row.Type == 'N' ? (byte)row.Precision : (byte)0,
                     NotNull = row.IsNotNull
                 });
@@ -69,33 +68,44 @@ namespace SQL_ConsoleApp.Files
         {
             var header = new DbfHeader();
             header.Version = reader.ReadByte();
-            header.LastUpdate = new DateTime(
-                1900 + reader.ReadByte(),
-                reader.ReadByte(),
-                reader.ReadByte()
-            );
+            int yy = reader.ReadByte();
+            int mm = reader.ReadByte();
+            int dd = reader.ReadByte();
+            header.LastUpdate = new DateTime(1900 + yy, mm, dd);
             header.RecordCount = reader.ReadInt32();
             header.HeaderLength = reader.ReadInt16();
             header.RecordLength = reader.ReadInt16();
 
+            // Пропускаем 20 байт резерва
             reader.ReadBytes(20);
 
             int fieldCount = (header.HeaderLength - 32 - 1) / 32;
             for (int i = 0; i < fieldCount; i++)
             {
-                var field = new DbfField
-                {
-                    Name = Encoding.ASCII.GetString(reader.ReadBytes(11)).TrimEnd('\0'),
-                    Type = (char)reader.ReadByte(),
-                    Length = reader.ReadByte(),
-                    DecimalCount = reader.ReadByte()
-                };
-                reader.ReadBytes(15);
+                var field = new DbfField();
+                // Имя поля (11 байт)
+                byte[] nameBytes = reader.ReadBytes(11);
+                field.Name = Encoding.ASCII.GetString(nameBytes).TrimEnd('\0');
+                // Тип
+                field.Type = (char)reader.ReadByte();
+                // Адрес (4 байта) – пропускаем
+                reader.ReadBytes(4);
+                // Длина
+                field.Length = reader.ReadByte();
+                // Десятичные
+                field.DecimalCount = reader.ReadByte();
+                // Резерв (5 байт)
+                reader.ReadBytes(5);
+                // Флаг NOT NULL (байт 23)
+                byte notNullFlag = reader.ReadByte();
+                field.NotNull = (notNullFlag == 0x01);
+                // Оставшийся резерв (8 байт)
+                reader.ReadBytes(8);
                 header.Fields.Add(field);
             }
 
-            reader.ReadByte(); // терминатор 0x0D
-
+            // Терминатор
+            reader.ReadByte(); // должно быть 0x0D
             return header;
         }
 
@@ -108,17 +118,21 @@ namespace SQL_ConsoleApp.Files
             writer.Write(RecordCount);
             writer.Write(HeaderLength);
             writer.Write(RecordLength);
-            writer.Write(new byte[20]);
+            writer.Write(new byte[20]); // резерв
 
             foreach (var field in Fields)
             {
+                // Имя поля (11 байт)
                 writer.Write(Encoding.ASCII.GetBytes(field.Name.PadRight(11, '\0')));
                 writer.Write(field.Type);
+                writer.Write(new byte[4]); // адрес
                 writer.Write((byte)field.Length);
                 writer.Write(field.DecimalCount);
-                writer.Write(new byte[15]);
+                writer.Write(new byte[5]); // резерв
+                // Флаг NOT NULL
+                writer.Write(field.NotNull ? (byte)0x01 : (byte)0x00);
+                writer.Write(new byte[8]); // резерв
             }
-
             writer.Write((byte)0x0D);
         }
     }

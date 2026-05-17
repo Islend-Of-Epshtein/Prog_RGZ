@@ -13,13 +13,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="FormsIcon.ico">
+    <Resource Include="Icons\FormsIcon.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="MainIcon.ico">
+    <Resource Include="Icons\MainIcon.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
   </ItemGroup>

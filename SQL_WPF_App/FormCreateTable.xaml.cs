@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using IntegerUpDown = Xceed.Wpf.Toolkit.IntegerUpDown;
 
 namespace SQL_WPF_App
@@ -9,14 +11,33 @@ namespace SQL_WPF_App
     public partial class FormCreateTable : Window
     {
         public event Action<string, RowDefinition[]> TableCreated;
+        public event Action<string, string, RowDefinition[]> TableStructureChanged;
+
+        private bool _isEditMode;
+        private string _originalTableName;
 
         public FormCreateTable()
         {
             InitializeComponent();
-            AddColumnButton_Click(null, null);
+            AddColumnRow();
+            _isEditMode = false;
         }
 
-        private void AddColumnButton_Click(object sender, RoutedEventArgs e)
+        public FormCreateTable(string tableName, List<(string Name, char Type, int Length, int Precision, bool NotNull)> fields)
+        {
+            InitializeComponent();
+            _originalTableName = tableName;
+            _isEditMode = true;
+
+            txtTableName.Text = tableName;
+            txtTableName.IsReadOnly = false;
+            this.Title = "Интерпретатор SQL - структура таблицы";
+
+            foreach (var field in fields)
+                AddColumnRow(field.Name, field.Type, field.Length, field.Precision, field.NotNull);
+        }
+
+        private void AddColumnRow(string name = "", char type = 'C', int length = 0, int precision = 0, bool notNull = false)
         {
             var rowPanel = new Grid();
             rowPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
@@ -29,118 +50,200 @@ namespace SQL_WPF_App
             rowPanel.Margin = new Thickness(0, 5, 0, 5);
 
             // Имя столбца
-            var txtName = new TextBox { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center, Height = 22 };
+            var txtName = new TextBox
+            {
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Height = 22,
+                Text = name
+            };
             Grid.SetColumn(txtName, 0);
             rowPanel.Children.Add(txtName);
 
-            // Тип (ComboBox)
-            var cmbType = new ComboBox { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center, Height = 22 };
+            // Тип
+            var cmbType = new ComboBox
+            {
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Height = 22
+            };
             cmbType.Items.Add("C");
             cmbType.Items.Add("N");
             cmbType.Items.Add("M");
             cmbType.Items.Add("D");
             cmbType.Items.Add("L");
-            cmbType.SelectedIndex = 0;
+            cmbType.SelectedItem = type.ToString();
+            cmbType.SelectionChanged += TypeSelectionChanged;
             Grid.SetColumn(cmbType, 1);
             rowPanel.Children.Add(cmbType);
 
             // Длина
-            var txtLength = new TextBox { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center, Height = 22 };
+            var txtLength = new TextBox
+            {
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Height = 22,
+                Text = length > 0 ? length.ToString() : ""
+            };
             Grid.SetColumn(txtLength, 2);
             rowPanel.Children.Add(txtLength);
 
             // Точность
-            var txtPrecision = new TextBox { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center, Height = 22 };
+            var txtPrecision = new TextBox
+            {
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Height = 22,
+                Text = precision > 0 ? precision.ToString() : ""
+            };
             Grid.SetColumn(txtPrecision, 3);
             rowPanel.Children.Add(txtPrecision);
 
-            // NOT NULL (CheckBox)
-            var chkNotNull = new CheckBox { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            // NOT NULL
+            var chkNotNull = new CheckBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsChecked = notNull
+            };
             Grid.SetColumn(chkNotNull, 4);
             rowPanel.Children.Add(chkNotNull);
 
-            // Позиция (IntegerUpDown из Xceed.Wpf.Toolkit)
+            // Позиция (IntegerUpDown)
             var numPosition = new IntegerUpDown
             {
                 Margin = new Thickness(10, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Height = 22,
-                Minimum = 0,
-                Maximum = 1000,
+                Minimum = -1,
+                Maximum = 1,
                 Width = 18,
                 Value = 0,
-                ShowButtonSpinner = true, // Показывать стрелочки
-                BorderBrush = System.Windows.Media.Brushes.Gray,
+                ShowButtonSpinner = true,
+                BorderBrush = Brushes.Gray,
                 BorderThickness = new Thickness(1)
             };
+            numPosition.ValueChanged += NumPosition_ValueChanged;
             Grid.SetColumn(numPosition, 5);
             rowPanel.Children.Add(numPosition);
 
-            // Сохраняем элементы в Tag для извлечения при сохранении
             rowPanel.Tag = new List<Control> { txtName, cmbType, txtLength, txtPrecision, chkNotNull, numPosition };
-
             rowsPanel.Children.Add(rowPanel);
+
+            // Обновляем состояние полей в зависимости от типа
+            TypeSelectionChanged(cmbType, null);
+        }
+
+        private void AddColumnButton_Click(object sender, RoutedEventArgs e) => AddColumnRow();
+
+        private void NumPosition_ValueChanged(object sender, EventArgs e)
+        {
+            var num = sender as IntegerUpDown;
+            if (num == null) return;
+            var rowGrid = FindParent<Grid>(num);
+            if (rowGrid == null) return;
+            int currentIndex = rowsPanel.Children.IndexOf(rowGrid);
+            if (currentIndex < 0) return;
+            int delta = num.Value ?? 0;
+            if (delta == 0) return;
+            int targetIndex = delta == -1 ? currentIndex + 1 : currentIndex - 1;
+            if (targetIndex < 0 || targetIndex >= rowsPanel.Children.Count) return;
+
+            num.ValueChanged -= NumPosition_ValueChanged;
+            var targetRow = rowsPanel.Children[targetIndex];
+            rowsPanel.Children.RemoveAt(currentIndex);
+            rowsPanel.Children.Insert(targetIndex, rowGrid);
+            num.Value = 0;
+            num.ValueChanged += NumPosition_ValueChanged;
+        }
+
+        private void TypeSelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var cmb = sender as ComboBox;
+            if (cmb == null) return;
+            var rowPanel = FindParent<Grid>(cmb);
+            var controls = rowPanel?.Tag as List<Control>;
+            if (controls == null) return;
+            var txtLength = controls[2] as TextBox;
+            var txtPrecision = controls[3] as TextBox;
+            string selectedType = cmb.SelectedItem?.ToString();
+
+            if (selectedType == "D" || selectedType == "L" || selectedType == "M")
+            {
+                txtLength.IsEnabled = false;
+                txtLength.Text = "";
+                txtPrecision.IsEnabled = false;
+                txtPrecision.Text = "";
+            }
+            else
+            {
+                txtLength.IsEnabled = true;
+                txtPrecision.IsEnabled = (selectedType == "N");
+                if (selectedType != "N")
+                    txtPrecision.Text = "";
+            }
+        }
+
+        private static T FindParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            while (child != null && !(child is T))
+                child = VisualTreeHelper.GetParent(child);
+            return child as T;
         }
 
         private void SaveButton_Click(object sender, RoutedEventArgs e)
         {
-            string tableName = txtTableName.Text.Trim();
-            if (string.IsNullOrEmpty(tableName))
+            string newTableName = txtTableName.Text.Trim();
+            if (string.IsNullOrEmpty(newTableName))
             {
                 MessageBox.Show("Введите имя таблицы", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             var rows = new List<RowDefinition>();
-
             foreach (UIElement element in rowsPanel.Children)
             {
-                if (element is Grid rowPanel)
+                var rowPanel = element as Grid;
+                var controls = rowPanel?.Tag as List<Control>;
+                if (controls == null) continue;
+
+                var txtName = controls[0] as TextBox;
+                var cmbType = controls[1] as ComboBox;
+                var txtLength = controls[2] as TextBox;
+                var txtPrecision = controls[3] as TextBox;
+                var chkNotNull = controls[4] as CheckBox;
+
+                string name = txtName.Text.Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+
+                string typeStr = cmbType.SelectedItem?.ToString();
+                if (string.IsNullOrEmpty(typeStr))
                 {
-                    var controls = rowPanel.Tag as List<Control>;
-                    if (controls == null) continue;
+                    MessageBox.Show($"Для столбца '{name}' не выбран тип", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                char type = typeStr[0];
+                string width = txtLength.Text.Trim();
+                string precision = txtPrecision.Text.Trim();
+                bool notNull = chkNotNull.IsChecked == true;
 
-                    var txtName = controls[0] as TextBox;
-                    var cmbType = controls[1] as ComboBox;
-                    var txtLength = controls[2] as TextBox;
-                    var txtPrecision = controls[3] as TextBox;
-                    var chkNotNull = controls[4] as CheckBox;
-                    var numPosition = controls[5] as IntegerUpDown;
+                // Валидация
+                if ((type == 'C' || type == 'N') && string.IsNullOrEmpty(width))
+                {
+                    MessageBox.Show($"Для столбца '{name}' типа {type} необходима длина", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                if (type == 'N' && string.IsNullOrEmpty(precision))
+                    precision = "0";
 
-                    string name = txtName.Text.Trim();
-                    if (string.IsNullOrEmpty(name)) continue;
-
-                    string typeStr = cmbType.SelectedItem?.ToString();
-                    if (string.IsNullOrEmpty(typeStr))
-                    {
-                        MessageBox.Show($"Для столбца '{name}' не выбран тип", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                    }
-
-                    char type = typeStr[0];
-                    string width = txtLength.Text.Trim();
-                    bool notNull = chkNotNull.IsChecked == true;
-
-                    // Валидация
-                    if (type == 'C' && string.IsNullOrEmpty(width))
-                    {
-                        MessageBox.Show($"Для столбца '{name}' типа C необходима длина", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                    }
-                    if (type == 'N' && string.IsNullOrEmpty(width))
-                    {
-                        MessageBox.Show($"Для столбца '{name}' типа N необходима длина", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                    }
-
-                    int widthInt = 0;
-                    if (!string.IsNullOrEmpty(width) && !int.TryParse(width, out widthInt))
-                    {
-                        MessageBox.Show($"Для столбца '{name}' длина должна быть числом", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                        return;
-                    }
-
-                    rows.Add(new RowDefinition(type, name, notNull, width, txtPrecision.Text));
+                try
+                {
+                    rows.Add(new RowDefinition(type, name, notNull, width, precision));
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка в столбце '{name}': {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
                 }
             }
 
@@ -150,13 +253,42 @@ namespace SQL_WPF_App
                 return;
             }
 
-            TableCreated?.Invoke(tableName, rows.ToArray());
-            this.Close();
+            if (_isEditMode)
+                TableStructureChanged?.Invoke(newTableName, _originalTableName, rows.ToArray());
+            else
+                TableCreated?.Invoke(newTableName, rows.ToArray());
+
+            Close();
         }
 
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
+        private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
+    }
+
+    public struct RowDefinition
+    {
+        public char Type;
+        public string Name;
+        public int Width;
+        public int Precision;
+        public bool IsNotNull;
+
+        public RowDefinition(char type, string name, bool isNotNull, string width = "", string precision = "")
         {
-            this.Close();
+            Type = type;
+            Name = name;
+            IsNotNull = isNotNull;
+            Width = 0;
+            Precision = 0;
+
+            if (type == 'C' && !string.IsNullOrEmpty(width))
+                Width = int.Parse(width);
+            else if (type == 'N')
+            {
+                if (!string.IsNullOrEmpty(width))
+                    Width = int.Parse(width);
+                if (!string.IsNullOrEmpty(precision))
+                    Precision = int.Parse(precision);
+            }
         }
     }
 }
