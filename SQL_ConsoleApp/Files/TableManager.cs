@@ -1,9 +1,10 @@
-﻿using System;
+﻿using Microsoft.VisualBasic.FileIO;
+using SQL_ConsoleApp.Commands;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using SQL_ConsoleApp.Commands;
 
 namespace SQL_ConsoleApp.Files
 {
@@ -234,7 +235,6 @@ namespace SQL_ConsoleApp.Files
         {
             int count = 0;
             var parser = update.GetWhereParser();
-
             for (int i = 0; i < _records.Count; i++)
             {
                 var record = _records[i];
@@ -262,7 +262,6 @@ namespace SQL_ConsoleApp.Files
         {
             int count = 0;
             var parser = delete.GetWhereParser();
-
             for (int i = 0; i < _records.Count; i++)
             {
                 var record = _records[i];
@@ -291,7 +290,7 @@ namespace SQL_ConsoleApp.Files
         {
             int count = 0;
             var parser = restore.GetWhereParser();
-
+            
             for (int i = 0; i < _records.Count; i++)
             {
                 var record = _records[i];
@@ -311,13 +310,16 @@ namespace SQL_ConsoleApp.Files
         public string Select(SelectCommand select)
         {
             var parser = select.GetWhereParser();
+            
             var result = new StringBuilder();
 
             var selectedRecords = _records.Where(r => !r.IsDeleted);
 
-            
             if (parser != null)
+            {
                 selectedRecords = selectedRecords.Where(r => parser.Evaluate(r.ToDictionary(_header.Fields)));
+            }
+            
 
             var columns = select.IsSelectAll() ? _header.Fields.Select(f => f.Name.TrimEnd('\0')).ToList() : select.GetColumns();
 

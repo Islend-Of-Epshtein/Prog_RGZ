@@ -70,7 +70,6 @@ namespace SQL_WPF_App
             try
             {
                 string result = _model.ExecuteCommand($"SELECT * FROM {_tableName};");
-                
                 _dataTable = ParseResultToDataTable(result);
                 dgvData.ItemsSource = _dataTable.DefaultView;
                 dgvData.AutoGenerateColumns = true;
@@ -159,6 +158,7 @@ namespace SQL_WPF_App
                 string command = $"UPDATE {_tableName} SET {setClause} WHERE {whereClause};";
                 try
                 {
+                    
                     _model.ExecuteCommand(command);
                     MessageBox.Show("Запись обновлена", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     LoadData();
@@ -311,18 +311,24 @@ namespace SQL_WPF_App
                     case 'N':
                         if (!decimal.TryParse(strValue, out decimal num))
                             return $"Поле '{col.Name}' (N) должно быть числом.";
-                        // Проверка на общую длину и дробную часть можно добавить, но сложно
                         break;
                     case 'D':
                         if (!DateTime.TryParse(strValue, out _))
                             return $"Поле '{col.Name}' (D) должно быть датой в формате ДД.ММ.ГГГГ.";
                         break;
                     case 'L':
-                        if (!strValue.Equals("TRUE", StringComparison.OrdinalIgnoreCase) && !strValue.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
-                            return $"Поле '{col.Name}' (L) должно быть TRUE или FALSE.";
+                        string upperVal = strValue.ToUpperInvariant();
+                        bool isValid = upperVal == "TRUE" || upperVal == "T" ||
+                                       upperVal == "FALSE" || upperVal == "F" ||
+                                       upperVal == "Y" || upperVal == "N" ||
+                                       upperVal == "?";
+                                       
+                        if (!isValid)
+                            return $"Поле '{col.Name}' (L) должно быть TRUE/FALSE, T/F, Y/N или ?";
                         break;
                     case 'M':
-                        // MEMO - без ограничений
+                        if (!strValue.Trim().StartsWith('@'))
+                            return $"Поле '{col.Name}' (M) должно начинаться с @";
                         break;
                 }
             }
@@ -335,15 +341,17 @@ namespace SQL_WPF_App
             if (val == null || string.IsNullOrEmpty(val.ToString()))
                 return "";
             string str = val.ToString().Trim();
-            if (str.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
-                return "TRUE";
-            if (str.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
-                return "FALSE";
-            if (float.TryParse(str, out _))
+            if (double.TryParse(str, out _))
+                return str;
+            string upperStr = str.ToUpperInvariant();
+            if (upperStr == "TRUE" || upperStr == "T" || upperStr == "Y" 
+                || upperStr == "FALSE" || upperStr == "F" || upperStr == "N" || upperStr == "?")
+                return str;
+            if (DateTime.TryParse(str, out _))
                 return str;
             // Строки экранируем
             str = str.Replace("\"", "");
-            return $"{str}";
+            return $"\"{str}\"";
         }
 
         // Построение WHERE для идентификации записи
@@ -366,6 +374,9 @@ namespace SQL_WPF_App
             if (string.IsNullOrWhiteSpace(result))
                 return dt;
 
+            // Получаем структуру таблицы
+            var structure = _model.GetTableStructure(_tableName);
+
             // Разбиваем на строки
             var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             if (lines.Length < 2)
@@ -373,10 +384,10 @@ namespace SQL_WPF_App
 
             // Определяем количество колонок по первой строке (заголовки)
             string headerLine = lines[0];
-            int columnWidth = 15; // Фиксированная ширина колонки из TableManager.Select()
+            int columnWidth = 15;
             int columnCount = headerLine.Length / columnWidth;
             if (headerLine.Length % columnWidth != 0)
-                columnCount++; // На всякий случай
+                columnCount++;
 
             // Извлекаем заголовки
             var headers = new List<string>();
@@ -395,7 +406,7 @@ namespace SQL_WPF_App
             foreach (var header in headers)
                 dt.Columns.Add(header);
 
-            // Обрабатываем строки данных (начиная с индекса 2, так как строка 1 — разделитель "---")
+            // Обрабатываем строки данных
             for (int i = 2; i < lines.Length; i++)
             {
                 string line = lines[i];
@@ -404,13 +415,19 @@ namespace SQL_WPF_App
 
                 var values = new List<string>();
 
-                // Извлекаем значения по фиксированной ширине
                 for (int col = 0; col < headers.Count; col++)
                 {
                     int start = col * columnWidth;
                     if (start < line.Length)
                     {
                         string val = line.Substring(start, Math.Min(columnWidth, line.Length - start)).Trim();
+
+                        // Форматируем значение по типу поля
+                        if (col < structure.Count)
+                        {
+                            val = FormatValueByType(val, structure[col].Type);
+                        }
+
                         values.Add(string.IsNullOrEmpty(val) ? "" : val);
                     }
                     else
@@ -419,7 +436,6 @@ namespace SQL_WPF_App
                     }
                 }
 
-                // Если значений меньше, чем колонок, дополняем
                 while (values.Count < headers.Count)
                     values.Add("");
 
@@ -427,6 +443,27 @@ namespace SQL_WPF_App
             }
 
             return dt;
+        }
+
+        private string FormatValueByType(string value, char type)
+        {
+            if (string.IsNullOrEmpty(value))
+                return value;
+
+            switch (type)
+            {
+                case 'D': // Дата — добавляем разделители
+                    if (value.Length == 8)
+                        return $"{value.Substring(0, 4)}.{value.Substring(4, 4)}.{value.Substring(6, 6)}";
+                    return value;
+
+                case 'C': // Символьный — закавычиваем
+                case 'M': // Memo — закавычиваем
+                    return $"\"{value}\"";
+
+                default: // N, L и другие — как есть
+                    return value;
+            }
         }
 
         private class ColumnInfo

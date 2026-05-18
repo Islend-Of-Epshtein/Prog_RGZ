@@ -218,7 +218,8 @@ namespace SQL_WPF_App
             _model.CloseTable();
             Application.Current.Shutdown();
         }
-
+        //СТАРАЯ ВЕРСИЯ 
+        /*
         private void HelpItem_Click(object sender, RoutedEventArgs e)
         {
             string helpText = @"
@@ -244,6 +245,14 @@ SQL Interpreter - Справка
 Логические операторы: AND, OR, XOR, NOT
 ";
             MessageBox.Show(helpText, "Справка", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        */
+        //Приличная версия
+        private void HelpItem_Click(object sender, RoutedEventArgs e)
+        {
+            var formHelp = new FormHelp();
+            formHelp.Owner = this;
+            formHelp.ShowDialog();
         }
 
         private void RefreshData()

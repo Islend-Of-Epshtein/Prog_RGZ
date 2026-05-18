@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text.RegularExpressions;
 
 namespace SQL_ConsoleApp.Commands
@@ -33,6 +34,10 @@ namespace SQL_ConsoleApp.Commands
             };
             Value = value;
         }
+        public void setValue(string value)
+        {
+            this.Value = value;
+        }
     }
 
     public class LogicalExpressionNode
@@ -48,13 +53,16 @@ namespace SQL_ConsoleApp.Commands
     public class LogicExpressionParser
     {
         private static readonly Regex TOKEN_PATTERN = new Regex(
-            @"(AND|OR|XOR|NOT|\(|\)|TRUE|FALSE|""[^""]*""|\d+(?:\.\d+)?|\w+|[=<>]+)",
+            @"(AND|OR|XOR|NOT|\(|\)|TRUE|FALSE|""[^""]*""|" +
+            @"\d{2}[.,\\\/\-]\d{2}[.,\\\/\-]\d{4}|\d{4}[.,\\\/\-]\d{2}[.,\\\/\-]\d{2}|" +
+            @"\d+(?:\.\d+)?|\w+|[=<>]+)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
         private static readonly Regex EXPRESSION_PATTERN = new Regex(
             @"^\s*(?<field>\w+)\s*(?<op>=|<>|<|>|<=|>=)\s*(?<value>" +
-            @"\d+(?:\.\d+)?|TRUE|FALSE|""[^""]*"")\s*$",
+            @"\d\d[\.\\\/\-]\d\d[\.\\/-]\d\d\d\d|\d\d\d\d[\.\\/-]\d\d[\.\\/-]\d\d" +
+            @"|\d+(?:\.\d+)?|TRUE|FALSE|""[^""]*"")\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
@@ -68,7 +76,6 @@ namespace SQL_ConsoleApp.Commands
         }
 
         public List<ElementaryExpression> GetAllExpressions() => _expressions;
-
         private LogicalExpressionNode Parse(string expression)
         {
             expression = expression.Trim();
@@ -111,7 +118,6 @@ namespace SQL_ConsoleApp.Commands
             }
             return tokens;
         }
-
         private bool AreParenthesesValid(List<string> tokens)
         {
             int balance = 0;
@@ -261,6 +267,7 @@ namespace SQL_ConsoleApp.Commands
                     throw new Exception($"Поле '{expr.RowName}' не найдено");
 
                 object fieldValue = row[expr.RowName];
+
                 object compareValue = ParseValue(expr.Value);
 
                 return expr.CompareOperator switch
@@ -290,14 +297,26 @@ namespace SQL_ConsoleApp.Commands
 
         private object ParseValue(string value)
         {
+            
+            string upperValue = value.ToUpperInvariant();
+
+            if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y" )
+                return "T";
+            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N" || upperValue == "?")
+                return "F";
+
+            // Потом строки в кавычках
             if (value.StartsWith("\""))
                 return value.Trim('"');
-            if (value.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
-                return true;
-            if (value.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
-                return false;
+
+            // Числа
             if (double.TryParse(value, out double dbl))
                 return dbl;
+
+            // Даты
+            if (DateTime.TryParse(value, out DateTime res))
+                return res.ToString("yyyyMMdd");
+
             return value;
         }
     }

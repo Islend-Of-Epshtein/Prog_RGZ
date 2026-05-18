@@ -1,0 +1,511 @@
+﻿<Window x:Class="SQL_WPF_App.FormHelp"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="📚 SQL Interpreter - Интерактивная справка"
+        Height="650" Width="900"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="#F5F5F5">
+
+    <Window.Resources>
+        <!-- Стили для вкладок -->
+        <Style TargetType="TabItem">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="Background" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border Name="Border" 
+                                Background="{TemplateBinding Background}"
+                                BorderThickness="0"
+                                Margin="0,0,1,0">
+                            <ContentPresenter x:Name="ContentSite"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Center"
+                                            ContentSource="Header"
+                                            Margin="12,8"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#4A90D9"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#6BA5E0"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Стиль для командных блоков -->
+        <Style x:Key="CommandBlockStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Margin" Value="0,5,0,5"/>
+            <Setter Property="Padding" Value="10"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="3" ShadowDepth="1" Opacity="0.1"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Стиль для кнопок поиска -->
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#4A90D9"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#6BA5E0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#2C5F8A"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Стиль для тегов -->
+        <Style x:Key="TagStyle" TargetType="Border">
+            <Setter Property="Background" Value="#E8F4FD"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="6,2"/>
+            <Setter Property="Margin" Value="2"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Заголовок с поиском -->
+        <Border Grid.Row="0" Background="#2C3E50" Padding="15">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="📚 SQL Interpreter" 
+                               FontSize="22" 
+                               FontWeight="Bold" 
+                               Foreground="White"/>
+                    <TextBlock Text="Интерактивное руководство по командам" 
+                               FontSize="12" 
+                               Foreground="#BDC3C7"
+                               Margin="0,5,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBox x:Name="txtSearch" 
+                             Width="250" 
+                             Height="30"
+                             Margin="0,0,10,0"
+                             VerticalContentAlignment="Center"
+                             Background="White"
+                             BorderThickness="0"
+                             Padding="10,0"
+                             FontSize="12"
+                             Foreground="Black">
+                        <TextBox.ToolTip>
+                            <ToolTip>Поиск по командам (например: SELECT, INSERT)</ToolTip>
+                        </TextBox.ToolTip>
+                    </TextBox>
+                    <Button x:Name="btnSearch" Content="🔍 Найти" Click="BtnSearch_Click" Width="80"/>
+                    <Button x:Name="btnClear" Content="✖" Click="BtnClear_Click" Width="35" Margin="5,0,0,0" Background="#E74C3C"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Основной контент с вкладками -->
+        <TabControl Grid.Row="1" Margin="10" TabStripPlacement="Top">
+            <!-- Вкладка: Все команды -->
+            <TabItem Header="📖 Все команды">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="stackAllCommands" Margin="10"/>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Вкладка: Быстрый старт -->
+            <TabItem Header="🚀 Быстрый старт">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <Border Style="{StaticResource CommandBlockStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="Bold" Foreground="#2C3E50">
+                                    <Run Text="🎯 С чего начать?"/>
+                                </TextBlock>
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="Black">
+                                    <Run Text="1. "/><Bold>Создайте новую таблицу</Bold><LineBreak/>
+                                    <Run Text="   CREATE TABLE students (id N(3,0) NOT NULL, name C(50), birth_date D, active L);"/><LineBreak/>
+                                    <Run Text="2. "/><Bold>Откройте существующую таблицу</Bold><LineBreak/>
+                                    <Run Text="   OPEN students.dbf;"/><LineBreak/>
+                                    <Run Text="3. "/><Bold>Добавьте данные</Bold><LineBreak/>
+                                    <Run Text="   INSERT INTO students (id, name, birth_date, active) VALUE (1, 'Иван', 15.05.2000, T);"/><LineBreak/>
+                                    <Run Text="4. "/><Bold>Выполните запрос</Bold><LineBreak/>
+                                    <Run Text="   SELECT * FROM students WHERE active = T;"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource CommandBlockStyle}" Margin="0,15,0,0">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="Bold" Foreground="#2C3E50">
+                                    <Run Text="💡 Советы"/>
+                                </TextBlock>
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="Black">
+                                    <Run Text="• "/>Все команды должны заканчиваться точкой с запятой (;)<LineBreak/>
+                                    <Run Text="• "/>Имена таблиц и полей чувствительны к регистру<LineBreak/>
+                                    <Run Text="• "/>Логические значения: T/F, Y/N, 1/0, TRUE/FALSE<LineBreak/>
+                                    <Run Text="• "/>Строковые значения заключайте в двойные кавычки<LineBreak/>
+                                    <Run Text="• "/>Даты можно писать в формате ДД.ММ.ГГГГ<LineBreak/>
+                                    <Run Text="• "/>Memo поля требуют указания пути к файлу: @C:\text.txt
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Статистика быстрого доступа -->
+                        <WrapPanel Margin="0,15,0,0">
+                            <Border Background="#27AE60" CornerRadius="8" Padding="15" Margin="5">
+                                <StackPanel>
+                                    <TextBlock Text="📊" FontSize="24" TextAlignment="Center"/>
+                                    <TextBlock Text="CREATE" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>
+                                    <TextBlock Text="Создание таблиц" Foreground="#E8F8F5" FontSize="11" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#2980B9" CornerRadius="8" Padding="15" Margin="5">
+                                <StackPanel>
+                                    <TextBlock Text="📂" FontSize="24" TextAlignment="Center"/>
+                                    <TextBlock Text="OPEN" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>
+                                    <TextBlock Text="Открытие файлов" Foreground="#E8F8F5" FontSize="11" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#8E44AD" CornerRadius="8" Padding="15" Margin="5">
+                                <StackPanel>
+                                    <TextBlock Text="🔍" FontSize="24" TextAlignment="Center"/>
+                                    <TextBlock Text="SELECT" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>
+                                    <TextBlock Text="Выборка данных" Foreground="#E8F8F5" FontSize="11" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#E67E22" CornerRadius="8" Padding="15" Margin="5">
+                                <StackPanel>
+                                    <TextBlock Text="✏️" FontSize="24" TextAlignment="Center"/>
+                                    <TextBlock Text="UPDATE" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>
+                                    <TextBlock Text="Обновление" Foreground="#E8F8F5" FontSize="11" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#C0392B" CornerRadius="8" Padding="15" Margin="5">
+                                <StackPanel>
+                                    <TextBlock Text="🗑️" FontSize="24" TextAlignment="Center"/>
+                                    <TextBlock Text="DELETE" FontWeight="Bold" Foreground="White" TextAlignment="Center"/>
+                                    <TextBlock Text="Удаление" Foreground="#E8F8F5" FontSize="11" TextAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </WrapPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Вкладка: Примеры запросов -->
+            <TabItem Header="💻 Примеры запросов">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <Border Style="{StaticResource CommandBlockStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="Bold" Foreground="#2C3E50">
+                                    <Run Text="📝 Базовые примеры"/>
+                                </TextBlock>
+
+                                <TextBlock Margin="0,10,0,0" FontWeight="Bold" Foreground="#4A90D9">Создание таблицы:</TextBlock>
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,5,0,10">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" Foreground="Black">
+                                        CREATE TABLE employees (id N(4,0) NOT NULL, name C(50), salary N(10,2), hiredate D, active L, notes M);
+                                    </TextBlock>
+                                </Border>
+
+                                <TextBlock FontWeight="Bold" Foreground="#4A90D9">Вставка данных:</TextBlock>
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,5,0,10">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" Foreground="Black">
+                                        INSERT INTO employees (id, name, salary, hiredate, active) VALUE (101, "Иванов", 50000.00, 15.03.2020, T);<LineBreak/>
+                                        INSERT INTO employees (id, name, salary, hiredate, active) VALUE (102, "Петров", 60000.00, 20.07.2019, Y);
+                                    </TextBlock>
+                                </Border>
+
+                                <TextBlock FontWeight="Bold" Foreground="#4A90D9">Выборка с условием:</TextBlock>
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,5,0,10">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" Foreground="Black">
+                                        SELECT * FROM employees WHERE active = T AND salary > 55000;<LineBreak/>
+                                        SELECT name, salary FROM employees WHERE hiredate > 01.01.2020;
+                                    </TextBlock>
+                                </Border>
+
+                                <TextBlock FontWeight="Bold" Foreground="#4A90D9">Обновление данных:</TextBlock>
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,5,0,10">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" Foreground="Black">
+                                        UPDATE employees SET salary = salary * 1.1 WHERE salary &lt; 50000;<LineBreak/>
+                                        UPDATE employees SET active = N WHERE id = 101;
+                                    </TextBlock>
+                                </Border>
+
+                                <TextBlock FontWeight="Bold" Foreground="#4A90D9">Удаление и восстановление:</TextBlock>
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,5,0,10">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" Foreground="Black">
+                                        DELETE FROM employees WHERE active = N;<LineBreak/>
+                                        RESTORE employees WHERE active = N;<LineBreak/>
+                                        TRUNCATE employees;
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource CommandBlockStyle}" Margin="0,15,0,0">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="Bold" Foreground="#2C3E50">
+                                    <Run Text="🔗 Сложные WHERE условия"/>
+                                </TextBlock>
+
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,10,0,0">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" Foreground="Black">
+                                        SELECT * FROM products WHERE (price > 100 AND price &lt; 500) OR category = "electronics";<LineBreak/>
+                                        UPDATE users SET status = "active" WHERE last_login > 01.01.2024 AND active = T XOR locked = T;<LineBreak/>
+                                        DELETE FROM logs WHERE date &lt; 01.01.2023;<LineBreak/>
+                                        SELECT * FROM orders WHERE NOT status = "cancelled";
+                                    </TextBlock>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Вкладка: Типы данных -->
+            <TabItem Header="🗃️ Типы данных">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <!-- Таблица типов данных -->
+                        <Border Style="{StaticResource CommandBlockStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="Bold" Foreground="#2C3E50">
+                        <Run Text="📋 Доступные типы полей"/>
+                                </TextBlock>
+
+                                <Grid Margin="0,15,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Заголовки -->
+                                    <Border Grid.Row="0" Grid.Column="0" Background="#4A90D9" Padding="8">
+                                        <TextBlock Text="Тип" FontWeight="Bold" Foreground="White"/>
+                                    </Border>
+                                    <Border Grid.Row="0" Grid.Column="1" Background="#4A90D9" Padding="8">
+                                        <TextBlock Text="Синтаксис" FontWeight="Bold" Foreground="White"/>
+                                    </Border>
+                                    <Border Grid.Row="0" Grid.Column="2" Background="#4A90D9" Padding="8">
+                                        <TextBlock Text="Описание" FontWeight="Bold" Foreground="White"/>
+                                    </Border>
+
+                                    <!-- Тип C -->
+                                    <Border Grid.Row="1" Grid.Column="0" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="C" FontWeight="Bold" Foreground="#E67E22"/>
+                                    </Border>
+                                    <Border Grid.Row="1" Grid.Column="1" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="C(50)" Foreground="Black"/>
+                                    </Border>
+                                    <Border Grid.Row="1" Grid.Column="2" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="Строка фиксированной длины (Character)" Foreground="Black"/>
+                                    </Border>
+
+                                    <!-- Тип N -->
+                                    <Border Grid.Row="2" Grid.Column="0" Background="White" Padding="8">
+                                        <TextBlock Text="N" FontWeight="Bold" Foreground="#27AE60"/>
+                                    </Border>
+                                    <Border Grid.Row="2" Grid.Column="1" Background="White" Padding="8">
+                                        <TextBlock Text="N(10,2)" Foreground="Black"/>
+                                    </Border>
+                                    <Border Grid.Row="2" Grid.Column="2" Background="White" Padding="8">
+                                        <TextBlock Text="Число с плавающей точкой (Numeric)" Foreground="Black"/>
+                                    </Border>
+
+                                    <!-- Тип D -->
+                                    <Border Grid.Row="3" Grid.Column="0" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="D" FontWeight="Bold" Foreground="#2980B9"/>
+                                    </Border>
+                                    <Border Grid.Row="3" Grid.Column="1" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="D" Foreground="Black"/>
+                                    </Border>
+                                    <Border Grid.Row="3" Grid.Column="2" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="Дата (Date) - формат ДД.ММ.ГГГГ" Foreground="Black"/>
+                                    </Border>
+
+                                    <!-- Тип L -->
+                                    <Border Grid.Row="4" Grid.Column="0" Background="White" Padding="8">
+                                        <TextBlock Text="L" FontWeight="Bold" Foreground="#8E44AD"/>
+                                    </Border>
+                                    <Border Grid.Row="4" Grid.Column="1" Background="White" Padding="8">
+                                        <TextBlock Text="L" Foreground="Black"/>
+                                    </Border>
+                                    <Border Grid.Row="4" Grid.Column="2" Background="White" Padding="8">
+                                        <StackPanel>
+                                            <TextBlock Text="Логический (Logical)" Foreground="Black"/>
+                                            <TextBlock Text="Допустимые формы записи:" Foreground="Black" FontSize="11" Margin="0,3,0,0"/>
+                                            <TextBlock Text="TRUE / T / Y / 1 — истина" Foreground="#27AE60" FontSize="11"/>
+                                            <TextBlock Text="FALSE / F / N / 0 / ? — ложь / NULL" Foreground="#C0392B" FontSize="11"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Тип M -->
+                                    <Border Grid.Row="5" Grid.Column="0" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="M" FontWeight="Bold" Foreground="#C0392B"/>
+                                    </Border>
+                                    <Border Grid.Row="5" Grid.Column="1" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="M" Foreground="Black"/>
+                                    </Border>
+                                    <Border Grid.Row="5" Grid.Column="2" Background="#F8F9FA" Padding="8">
+                                        <TextBlock Text="Memo поле - хранит путь к текстовому файлу (@file.txt)" Foreground="Black"/>
+                                    </Border>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- NOT NULL пояснение -->
+                        <Border Style="{StaticResource CommandBlockStyle}" Margin="0,15,0,0">
+                            <StackPanel>
+                                <TextBlock FontSize="16" FontWeight="Bold" Foreground="#2C3E50">
+                        <Run Text="⚠️ Ограничение NOT NULL"/>
+                                </TextBlock>
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" Foreground="Black">
+                        При создании или изменении таблицы можно указать NOT NULL для обязательного заполнения поля.
+                                </TextBlock>
+                                <Border Background="#F8F9FA" CornerRadius="4" Padding="10" Margin="0,10,0,0">
+                                    <TextBlock FontFamily="Consolas" FontSize="11" Foreground="Black">
+                            CREATE TABLE users (id N(5,0) NOT NULL, name C(50) NOT NULL, age N(3,0));
+                                    </TextBlock>
+                                </Border>
+                                <TextBlock Margin="0,10,0,0" Foreground="#E74C3C" FontSize="11">
+                        При попытке вставить NULL в NOT NULL поле будет выдана ошибка!
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Вкладка: О программе -->
+            <TabItem Header="ℹ️ О программе">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15" HorizontalAlignment="Center">
+                        <Border Style="{StaticResource CommandBlockStyle}" Width="500">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="📚 SQL Interpreter" 
+                                           FontSize="28" 
+                                           FontWeight="Bold" 
+                                           Foreground="#2C3E50"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="Версия 2.0" 
+                                           FontSize="14" 
+                                           Foreground="#7F8C8D"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,5,0,0"/>
+
+                                <Separator Margin="0,20,0,20" Height="1" Background="#BDC3C7"/>
+
+                                <TextBlock Text="Возможности программы:" 
+                                           FontWeight="Bold" 
+                                           FontSize="14"
+                                           Foreground="Black"
+                                           Margin="0,0,0,10"/>
+
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Полная поддержка DBF формата с memo полями</TextBlock>
+                                </CheckBox>
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Графический интерфейс для работы с данными</TextBlock>
+                                </CheckBox>
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Выполнение SQL запросов в реальном времени</TextBlock>
+                                </CheckBox>
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Логическое удаление записей (DELETE)</TextBlock>
+                                </CheckBox>
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Физическое удаление (TRUNCATE)</TextBlock>
+                                </CheckBox>
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Восстановление записей (RESTORE)</TextBlock>
+                                </CheckBox>
+                                <CheckBox IsChecked="True" IsEnabled="False" Margin="0,5" Foreground="Black">
+                                    <TextBlock Foreground="Black">Изменение структуры таблиц (ALTER)</TextBlock>
+                                </CheckBox>
+
+                                <Separator Margin="0,20,0,20"/>
+
+                                <TextBlock Text="© 2024 SQL Interpreter" 
+                                           FontSize="11" 
+                                           Foreground="#7F8C8D"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="Интерпретатор SQL с поддержкой DBF формата" 
+                                           FontSize="11" 
+                                           Foreground="#7F8C8D"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- Нижняя панель с интерактивными подсказками -->
+        <Border Grid.Row="2" Background="#2C3E50" Padding="10">
+            <StackPanel>
+                <TextBlock x:Name="txtTip" 
+                           Foreground="#BDC3C7" 
+                           FontSize="11"
+                           TextWrapping="Wrap">
+                    💡 Совет: Нажмите на любую команду в справке, чтобы скопировать её в буфер обмена
+                </TextBlock>
+                <TextBlock Foreground="#7F8C8D" 
+                           FontSize="10" 
+                           Margin="0,5,0,0"
+                           TextWrapping="Wrap">
+                    🔍 Поддерживаемые операторы: =, &lt;, &gt;, &lt;=, &gt;=, &lt;&gt; | Логические: AND, OR, XOR, NOT
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

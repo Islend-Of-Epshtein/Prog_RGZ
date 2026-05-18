@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace SQL_ConsoleApp.Files
 {
@@ -12,7 +14,7 @@ namespace SQL_ConsoleApp.Files
 
         public DbfRecord(int fieldCount)
         {
-            _values = new List<string>(new string[fieldCount]);
+            _values = new List<string>();
             IsDeleted = false;
         }
 
@@ -28,6 +30,8 @@ namespace SQL_ConsoleApp.Files
 
         public string GetValue(int index)
         {
+            if (index < 0 || index >= _values.Count)
+                throw new ArgumentOutOfRangeException(nameof(index));
             return _values[index];
         }
 
@@ -36,15 +40,33 @@ namespace SQL_ConsoleApp.Files
             string value = _values[index];
             if (field.Type == 'M' && dbtManager != null)
                 return dbtManager.GetText(value);
-            if (field.Type == 'D' && dbtManager != null)
+            if (field.Type == 'D')
             {
-                return value?.Insert(1, ".").Insert(4,".") ?? "";
+                if (DateTime.TryParseExact(value?.Trim(), "yyyyMMdd",
+                    CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date))
+                {
+                    return date.ToString("dd.MM.yyyy");
+                }
+                return value?.Trim() ?? "";
+            }
+            if (field.Type == 'L')
+            {
+                string val = value?.Trim() ?? "";
+                if (val == "T") return "TRUE";
+                if (val == "F") return "FALSE";
+                if (val == "?") return "NULL";
+                return val;
             }
             return value?.Trim() ?? "";
         }
 
         public void SetValue(int index, string value, DbfField field, DbtManager dbtManager)
         {
+            // Расширяем список до нужного индекса
+            while (_values.Count <= index)
+            {
+                _values.Add(""); // добавляем пустые значения
+            }
             _values[index] = FormatValue(value, field, dbtManager);
         }
 
@@ -73,8 +95,25 @@ namespace SQL_ConsoleApp.Files
             }
 
             if (field.Type == 'C')
-                return value.PadRight(field.Length).Substring(0, field.Length);
+            {
+                if (value.StartsWith("\""))
+                {
+                    int firstIndex = value.IndexOf('"'),
+                        lastIndex = value.LastIndexOf('"');
 
+                    if (firstIndex >= 0)
+                    {
+                        value = value.Remove(firstIndex, 1);
+                        // После удаления первого символа, lastIndex смещается на -1
+                        if (lastIndex >= 0)
+                        {
+                            lastIndex--; // корректируем индекс
+                            value = value.Remove(lastIndex, 1);
+                        }
+                    }
+                }
+                return value.PadRight(field.Length).Substring(0, field.Length);
+            }
             if (field.Type == 'N')
             {
                 if (double.TryParse(value, out double num))
@@ -88,17 +127,21 @@ namespace SQL_ConsoleApp.Files
             if (field.Type == 'D')
             {
                 if (DateTime.TryParse(value, out DateTime date))
-                    return date.ToString("ddMMyyyy");
+                    return date.ToString("yyyyMMdd");
                 return "        ";
             }
 
             if (field.Type == 'L')
             {
-                if (value.Equals("TRUE", StringComparison.OrdinalIgnoreCase))
+                string upperValue = value.ToUpperInvariant();
+
+                if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y")
                     return "T";
-                if (value.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+
+                if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N")
                     return "F";
-                return "?";
+
+                return "?"; // NULL значение
             }
 
             return value;
@@ -133,7 +176,7 @@ namespace SQL_ConsoleApp.Files
                 writer.Write(record.IsDeleted ? (byte)0x2A : (byte)0x20);
                 foreach (var value in record._values)
                 {
-                    string safeValue = value ?? "";                     
+                    string safeValue = value ?? "";    
                     byte[] data = Encoding.ASCII.GetBytes(safeValue);
                     writer.Write(data);
                 }

@@ -13,10 +13,9 @@ namespace SQL_ConsoleApp.Commands
 
         private static readonly Regex SET_PATTERN = new Regex(
             @"^\s*(?<field>\w+)\s*=\s*(?<value>" +
-            @"\d+(?:\.\d+)?|TRUE|FALSE|""[^""]*"")\s*$",
+            @"\d+(?:\.\d+)?|TRUE|FALSE|T|F|N|Y|\?|""[^""]*""|\d\d(\.|,|\\|/)\d\d\1\d\d\d\d|\d\d\d\d(\.|,|\\|/)\d\d\1\d\d)\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
-
         private readonly Match _regex;
         private readonly List<(string Field, string Value)> _values;
         private readonly LogicExpressionParser _whereParser;
@@ -37,14 +36,30 @@ namespace SQL_ConsoleApp.Commands
                 Match match = SET_PATTERN.Match(part);
                 if (!match.Success)
                     throw new Exception($"Неверный синтаксис в SET: {part}");
-                _values.Add((match.Groups["field"].Value, match.Groups["value"].Value));
+
+                string field = match.Groups["field"].Value;
+                string value = match.Groups["value"].Value;
+                string normalizedValue = NormalizeValue(value);
+
+                _values.Add((field, normalizedValue));
             }
 
             string logicCommand = _regex.Groups["logicCommand"].Value;
             if (!string.IsNullOrWhiteSpace(logicCommand))
                 _whereParser = new LogicExpressionParser(logicCommand);
         }
+        private string NormalizeValue(string value)
+        {
+            string upperValue = value.ToUpperInvariant();
 
+            // Нормализуем логические значения (без кавычек)
+            if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y" || upperValue == "1")
+                return "TRUE";
+            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N" || upperValue == "0" || upperValue == "?")
+                return "FALSE";
+
+            return value;
+        }
         public string GetTableName() => _regex.Groups["tableName"].Value;
         public List<(string Field, string Value)> GetValues() => _values;
         public bool HasWhereCondition() => _whereParser != null;

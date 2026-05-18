@@ -36,11 +36,14 @@ namespace SQL_ConsoleApp.Files
             var header = new DbfHeader();
             foreach (var row in rows)
             {
+                int fieldLength = row.Type == 'C' ? row.Width :
+                         (row.Type == 'N' ? row.Width :
+                         (row.Type == 'D' ? 8 : 1));
                 header.Fields.Add(new DbfField
                 {
                     Name = row.Name.PadRight(11, '\0'),
                     Type = row.Type,
-                    Length = row.Type == 'C' ? row.Width : (row.Type == 'N' ? row.Width : 1),
+                    Length = fieldLength,
                     DecimalCount = row.Type == 'N' ? (byte)row.Precision : (byte)0,
                     NotNull = row.IsNotNull
                 });
