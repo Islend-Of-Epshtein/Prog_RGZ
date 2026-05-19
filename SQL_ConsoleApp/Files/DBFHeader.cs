@@ -13,6 +13,7 @@ namespace SQL_ConsoleApp.Files
         public int Length;
         public byte DecimalCount;
         public bool NotNull;
+        public int byteLenght;
     }
 
     public class DbfHeader
@@ -37,15 +38,23 @@ namespace SQL_ConsoleApp.Files
             foreach (var row in rows)
             {
                 int fieldLength = row.Type == 'C' ? row.Width :
-                         (row.Type == 'N' ? row.Width :
-                         (row.Type == 'D' ? 8 : 1));
+                         (row.Type == 'N' ? row.Width : 0);
                 header.Fields.Add(new DbfField
                 {
                     Name = row.Name.PadRight(11, '\0'),
                     Type = row.Type,
                     Length = fieldLength,
                     DecimalCount = row.Type == 'N' ? (byte)row.Precision : (byte)0,
-                    NotNull = row.IsNotNull
+                    NotNull = row.IsNotNull,
+                    byteLenght = row.Type switch
+                    {
+                        'C' => fieldLength,
+                        'N' => fieldLength,
+                        'D' => 8,
+                        'L' => 1,
+                        'M' => 1,
+                        _ => 1
+                    }
                 });
             }
             header.HeaderLength = CalculateHeaderLength(header.Fields.Count);
@@ -63,7 +72,9 @@ namespace SQL_ConsoleApp.Files
         {
             short length = 1;
             foreach (var field in fields)
-                length += (short)field.Length;
+            {
+                length += (short)field.byteLenght;
+            }
             return length;
         }
 
@@ -94,7 +105,15 @@ namespace SQL_ConsoleApp.Files
                 // Адрес (4 байта) – пропускаем
                 reader.ReadBytes(4);
                 // Длина
-                field.Length = reader.ReadByte();
+                field.byteLenght = reader.ReadByte();
+                if (field.Type == 'C' || field.Type == 'N')
+                {
+                    field.Length = field.byteLenght;
+                }
+                else
+                {
+                    field.Length = 0;
+                }
                 // Десятичные
                 field.DecimalCount = reader.ReadByte();
                 // Резерв (5 байт)
@@ -129,7 +148,7 @@ namespace SQL_ConsoleApp.Files
                 writer.Write(Encoding.ASCII.GetBytes(field.Name.PadRight(11, '\0')));
                 writer.Write(field.Type);
                 writer.Write(new byte[4]); // адрес
-                writer.Write((byte)field.Length);
+                writer.Write((byte)field.byteLenght);
                 writer.Write(field.DecimalCount);
                 writer.Write(new byte[5]); // резерв
                 // Флаг NOT NULL

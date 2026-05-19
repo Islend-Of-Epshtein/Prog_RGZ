@@ -144,6 +144,55 @@ namespace SQL_ConsoleApp.Model
 
             throw new Exception("Неизвестная команда");
         }
+        public void RenameTable(string oldName, string newName)
+        {
+            if (string.IsNullOrEmpty(oldName) || string.IsNullOrEmpty(newName))
+                throw new Exception("Имя таблицы не может быть пустым");
+
+            if (oldName.Equals(newName))
+                return;
+
+            string oldDbfPath = $"{oldName}.dbf";
+            string newDbfPath = $"{newName}.dbf";
+            string oldDbtPath = $"{oldName}.dbt";
+            string newDbtPath = $"{newName}.dbt";
+
+            if (!System.IO.File.Exists(oldDbfPath))
+                throw new Exception($"Таблица '{oldName}' не найдена");
+
+            if (System.IO.File.Exists(newDbfPath))
+                throw new Exception($"Таблица '{newName}' уже существует");
+
+            // Запоминаем, является ли текущая таблица той, которую переименовываем
+            bool isCurrentTable = _currentTableName != null &&
+                                  _currentTableName.Equals(oldName, StringComparison.OrdinalIgnoreCase);
+
+            // Если таблица открыта - сохраняем и закрываем
+            if (isCurrentTable)
+            {
+                CloseTable();   
+            }
+
+            try
+            {
+                // Переименовываем файлы
+                System.IO.File.Move(oldDbfPath, newDbfPath);
+
+                if (System.IO.File.Exists(oldDbtPath))
+                    System.IO.File.Move(oldDbtPath, newDbtPath);
+
+                // Если это была текущая таблица - открываем заново с новым именем
+                if (isCurrentTable)
+                {
+                    _currentTable = TableManager.Open(newDbfPath);
+                    _currentTableName = newName;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Ошибка при переименовании таблицы: {ex.Message}");
+            }
+        }
         public List<(string Name, char Type, int Length, int Precision, bool NotNull)> GetTableStructure()
         {
             if (_currentTable == null)
@@ -153,6 +202,14 @@ namespace SQL_ConsoleApp.Model
         public string GetTableName()
         {
             return _currentTableName;
+        }
+        public bool isTableOpened()
+        {
+            if(_currentTable == null)
+            {
+                return false;
+            }
+            return true;
         }
         public void CloseTable()
         {

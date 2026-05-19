@@ -126,17 +126,17 @@ namespace SQL_ConsoleApp.Files
                     // Используем InvariantCulture для точки в качестве разделителя
                     string formatted = num.ToString($"F{field.DecimalCount}", System.Globalization.CultureInfo.InvariantCulture);
                     
-                    if (formatted.Length > field.Length)
+                    if (formatted.Length > field.byteLenght)
                     {
-                        formatted = formatted.Substring(0, field.Length);
+                        formatted = formatted.Substring(0, field.byteLenght);
                     }
                     else
                     {
-                        formatted = formatted.PadLeft(field.Length);
+                        formatted = formatted.PadLeft(field.byteLenght);
                     }
                     return formatted;
                 }
-                return new string(' ', field.Length);
+                return new string(' ', field.byteLenght);
             }
 
             if (field.Type == 'D')
@@ -177,7 +177,7 @@ namespace SQL_ConsoleApp.Files
 
                 foreach (var field in header.Fields)
                 {
-                    byte[] fieldData = reader.ReadBytes(field.Length);
+                    byte[] fieldData = reader.ReadBytes(field.byteLenght);
                     string value = Encoding.ASCII.GetString(fieldData);
                     record._values.Add(value);
                 }

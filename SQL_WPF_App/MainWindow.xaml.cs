@@ -75,7 +75,7 @@ namespace SQL_WPF_App
 
         private void StructureItem_Click(object sender, RoutedEventArgs e)
         {
-            if (_model==null)
+            if (!_model.isTableOpened())
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -195,11 +195,19 @@ namespace SQL_WPF_App
                         }
 
                         // 5. Переименовываем таблицу, если имя изменилось
-                        if (!string.Equals(newName, oldName, StringComparison.OrdinalIgnoreCase))
+                        if (!string.Equals(newName, oldName))
                         {
-                            System.IO.File.Move($"{oldName}.dbf", $"{newName}.dbf");
-                            if (System.IO.File.Exists($"{oldName}.dbt"))
-                                System.IO.File.Move($"{oldName}.dbt", $"{newName}.dbt");
+                            try
+                            {
+                                _model.RenameTable(oldName, newName);
+                                dgvResult.ItemsSource = null;
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show($"Ошибка при переименовании таблицы: {ex.Message}",
+                                    "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                                return;
+                            }
                         }
 
                         MessageBox.Show($"Структура таблицы '{oldName}' изменена.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -220,7 +228,7 @@ namespace SQL_WPF_App
 
         private void ShrinkItem_Click(object sender, RoutedEventArgs e)
         {
-            if (_model==null)
+            if (!_model.isTableOpened())
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -252,6 +260,11 @@ namespace SQL_WPF_App
 
         private void CloseItem_Click(object sender, RoutedEventArgs e)
         {
+            if (!_model.isTableOpened())
+            {
+                MessageBox.Show("Таблиц не открыто", "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             try
             {
                 _model.CloseTable();
@@ -266,7 +279,7 @@ namespace SQL_WPF_App
 
         private void DropItem_Click(object sender, RoutedEventArgs e)
         {
-            if (_model==null)
+            if (!_model.isTableOpened())
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -297,7 +310,7 @@ namespace SQL_WPF_App
 
         private void DataItem_Click(object sender, RoutedEventArgs e)
         {
-            if (_model==null)
+            if (!_model.isTableOpened())
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -310,6 +323,10 @@ namespace SQL_WPF_App
 
         private void QueryItem_Click(object sender, RoutedEventArgs e)
         {
+            if (!_model.isTableOpened()) {
+                MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             var form = new FormQuery(_model);
             form.QueryExecuted += RefreshData;
             form.ShowDialog();
@@ -320,41 +337,16 @@ namespace SQL_WPF_App
             _model.CloseTable();
             Application.Current.Shutdown();
         }
-        //СТАРАЯ ВЕРСИЯ 
-        /*
-        private void HelpItem_Click(object sender, RoutedEventArgs e)
-        {
-            string helpText = @"
-SQL Interpreter - Справка
-
-Команды:
-  CREATE TABLE <имя> (<поле1> <тип> [NOT NULL], ...);
-  OPEN <имя_файла>;
-  CLOSE;
-  ALTER TABLE <имя> COLUMN ADD <поле> <тип> [NOT NULL];
-  ALTER TABLE <имя> COLUMN REMOVE <поле>;
-  ALTER TABLE <имя> COLUMN RENAME <старое> <новое>;
-  INSERT INTO <имя> (<поля>) VALUE (<значения>);
-  UPDATE <имя> SET <поле>=<значение> [WHERE <условие>];
-  DELETE FROM <имя> [WHERE <условие>];
-  SELECT *|поля FROM <имя> [WHERE <условие>];
-  TRUNCATE <имя>;
-  RESTORE <имя> [WHERE <условие>];
-  DROP TABLE <имя>;
-  EXIT;
-        */
         private void HelpItem_Click(object sender, RoutedEventArgs e)
         {
             var formHelp = new FormHelp();
             formHelp.Owner = this;
             formHelp.ShowDialog();
         }
-
         private void RefreshData()
         {
-            if (_model == null)
+            if (!_model.isTableOpened())
                 return;
-
             try
             {
                 string command = $"SELECT * FROM {_model.GetTableName()};";

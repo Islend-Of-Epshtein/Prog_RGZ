@@ -80,6 +80,10 @@ namespace SQL_ConsoleApp.Files
         public void Close()
         {
             Save();
+
+            _records = null;
+            _header = null;
+            _dbtManager = null;
         }
 
         private bool HasMemoField()
@@ -128,8 +132,8 @@ namespace SQL_ConsoleApp.Files
         {
             return field.Type switch
             {
-                'C' => new string(' ', field.Length),
-                'N' => new string(' ', field.Length),
+                'C' => new string(' ', field.byteLenght),
+                'N' => new string(' ', field.byteLenght),
                 'D' => "        ",
                 'L' => "?",
                 'M' => "          ",
@@ -144,9 +148,18 @@ namespace SQL_ConsoleApp.Files
                 Name = add.GetRowName().PadRight(11, '\0'),
                 Type = add.GetType(),
                 Length = add.GetType() == 'C' ? int.Parse(add.GetWidth()) :
-                         add.GetType() == 'N' ? int.Parse(add.GetWidth()) : 1,
+                         add.GetType() == 'N' ? int.Parse(add.GetWidth()) : 0,
                 DecimalCount = add.GetType() == 'N' ? byte.Parse(add.GetPrecision()) : (byte)0,
-                NotNull = add.IsNotNull()
+                NotNull = add.IsNotNull(),
+                byteLenght = add.GetType() switch
+                {
+                    'C' => int.Parse(add.GetWidth()),
+                    'N' => int.Parse(add.GetWidth()),
+                    'D' => 8,
+                    'L' => 1,
+                    'M' => 1,
+                    _ => 1
+                }
             };
 
             _header.Fields.Add(newField);
@@ -200,9 +213,18 @@ namespace SQL_ConsoleApp.Files
                 Name = update.GetRowName().PadRight(11, '\0'),
                 Type = update.GetType(),
                 Length = update.GetType() == 'C' ? int.Parse(update.GetWidth()) :
-                         update.GetType() == 'N' ? int.Parse(update.GetWidth()) : 1,
+                         update.GetType() == 'N' ? int.Parse(update.GetWidth()) : 0,
                 DecimalCount = update.GetType() == 'N' ? byte.Parse(update.GetPrecision()) : (byte)0,
-                NotNull = update.IsNotNull()
+                NotNull = update.IsNotNull(),
+                byteLenght = update.GetType() switch
+                {
+                    'C' => int.Parse(update.GetWidth()),
+                    'N' => int.Parse(update.GetWidth()),
+                    'D' => 8,
+                    'L' => 1,
+                    'M' => 1,
+                    _ => 1
+                }
             };
 
             // Проверка NOT NULL перед преобразованием
@@ -215,7 +237,7 @@ namespace SQL_ConsoleApp.Files
                     string convertedValue = TryConvertValue(oldValue, oldField, newField);
 
                     // Если после преобразования значение пустое и поле NOT NULL - ошибка
-                    if (string.IsNullOrWhiteSpace(convertedValue) || convertedValue.Trim() == new string(' ', newField.Length))
+                    if (string.IsNullOrWhiteSpace(convertedValue) || convertedValue.Trim() == new string(' ', newField.byteLenght))
                     {
                         throw new Exception($"Поле '{update.GetRowName()}' NOT NULL не может быть пустым после преобразования. Запись #{_records.IndexOf(record) + 1} содержит недопустимое значение.");
                     }
@@ -259,10 +281,10 @@ namespace SQL_ConsoleApp.Files
                 // Но нужно обрезать/дополнить до новой длины
                 if (newField.Type == 'C')
                 {
-                    if (trimmedValue.Length > newField.Length)
-                        return trimmedValue.Substring(0, newField.Length);
+                    if (trimmedValue.Length > newField.byteLenght)
+                        return trimmedValue.Substring(0, newField.byteLenght);
                     else
-                        return trimmedValue.PadRight(newField.Length);
+                        return trimmedValue.PadRight(newField.byteLenght);
                 }
                 return oldValue;
             }
@@ -277,24 +299,24 @@ namespace SQL_ConsoleApp.Files
                         if (double.TryParse(trimmedValue, out double num))
                         {
                             string formatted = num.ToString("F" + newField.DecimalCount);
-                            return formatted.PadLeft(newField.Length);
+                            return formatted.PadLeft(newField.byteLenght);
                         }
-                        return new string(' ', newField.Length);
+                        return new string(' ', newField.byteLenght);
                     }
                     else if (oldField.Type == 'L')
                     {
                         // Логическое -> число (TRUE=1, FALSE=0)
                         if (trimmedValue == "T")
                         {
-                            string formatted = "1".PadLeft(newField.Length);
+                            string formatted = "1".PadLeft(newField.byteLenght);
                             return formatted;
                         }
                         else if (trimmedValue == "F")
                         {
-                            string formatted = "0".PadLeft(newField.Length);
+                            string formatted = "0".PadLeft(newField.byteLenght);
                             return formatted;
                         }
-                        return new string(' ', newField.Length);
+                        return new string(' ', newField.byteLenght);
                     }
                     else if (oldField.Type == 'N')
                     {
@@ -302,9 +324,9 @@ namespace SQL_ConsoleApp.Files
                         if (double.TryParse(trimmedValue, out double num))
                         {
                             string formatted = num.ToString("F" + newField.DecimalCount);
-                            return formatted.PadLeft(newField.Length);
+                            return formatted.PadLeft(newField.byteLenght);
                         }
-                        return new string(' ', newField.Length);
+                        return new string(' ', newField.byteLenght);
                     }
                     break;
 
@@ -313,19 +335,19 @@ namespace SQL_ConsoleApp.Files
                     {
                         // Число -> строка
                         string numStr = trimmedValue.Trim();
-                        if (numStr.Length > newField.Length)
-                            return numStr.Substring(0, newField.Length);
+                        if (numStr.Length > newField.byteLenght)
+                            return numStr.Substring(0, newField.byteLenght);
                         else
-                            return numStr.PadRight(newField.Length);
+                            return numStr.PadRight(newField.byteLenght);
                     }
                     else if (oldField.Type == 'L')
                     {
                         // Логическое -> строка
                         string boolStr = trimmedValue == "T" ? "TRUE" : "FALSE";
-                        if (boolStr.Length > newField.Length)
-                            return boolStr.Substring(0, newField.Length);
+                        if (boolStr.Length > newField.byteLenght)
+                            return boolStr.Substring(0, newField.byteLenght);
                         else
-                            return boolStr.PadRight(newField.Length);
+                            return boolStr.PadRight(newField.byteLenght);
                     }
                     break;
 

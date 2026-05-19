@@ -1,11 +1,11 @@
 ﻿<Window x:Class="SQL_WPF_App.FormHelp"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="📚 SQL Interpreter - Интерактивная справка"
+        Title="SQL Interpreter - Интерактивная справка"
         Height="650" Width="900"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
-        Background="#F5F5F5">
+        Background="#F5F5F5" Icon="/Icons/MainIcon.ico">
 
     <Window.Resources>
         <!-- Стили для вкладок -->
@@ -492,20 +492,63 @@
 
         <!-- Нижняя панель с интерактивными подсказками -->
         <Border Grid.Row="2" Background="#2C3E50" Padding="10">
-            <StackPanel>
-                <TextBlock x:Name="txtTip" 
-                           Foreground="#BDC3C7" 
-                           FontSize="11"
-                           TextWrapping="Wrap">
-                    💡 Совет: Нажмите на любую команду в справке, чтобы скопировать её в буфер обмена
-                </TextBlock>
-                <TextBlock Foreground="#7F8C8D" 
-                           FontSize="10" 
-                           Margin="0,5,0,0"
-                           TextWrapping="Wrap">
-                    🔍 Поддерживаемые операторы: =, &lt;, &gt;, &lt;=, &gt;=, &lt;&gt; | Логические: AND, OR, XOR, NOT
-                </TextBlock>
-            </StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock x:Name="txtTip" 
+                       Foreground="#BDC3C7" 
+                       FontSize="11"
+                       TextWrapping="Wrap">
+                💡 Совет: Нажмите на любую команду в справке, чтобы скопировать её в буфер обмена
+                    </TextBlock>
+                    <TextBlock Foreground="#7F8C8D" 
+                       FontSize="10" 
+                       Margin="0,5,0,0"
+                       TextWrapping="Wrap">
+                🔍 Поддерживаемые операторы: =, &lt;, &gt;, &lt;=, &gt;=, &lt;&gt; | Логические: AND, OR, XOR, NOT
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Кнопка закрытия с крестиком в круге -->
+                <Button Grid.Column="1" 
+                    x:Name="btnCloseHelp"
+                    Width="30" 
+                    Height="30"
+                    VerticalAlignment="Center"
+                    Margin="10,0,0,0"
+                    Cursor="Hand"
+                    ToolTip="Закрыть справку (Esc)"
+                    Click="BtnCloseHelp_Click"> 
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border" 
+                    Background="White" 
+                    CornerRadius="15"
+                    BorderBrush="#BDC3C7"
+                    BorderThickness="1">
+                                <TextBlock x:Name="text" 
+                           Text="✕" 
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center"
+                           Foreground="#2C3E50"
+                           FontSize="16"
+                           FontWeight="Bold"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#E74C3C"/>
+                                    <Setter TargetName="border" Property="BorderBrush" Value="#E74C3C"/>
+                                    <Setter TargetName="text" Property="Foreground" Value="White"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
         </Border>
     </Grid>
 </Window>

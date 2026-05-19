@@ -16,7 +16,8 @@ namespace SQL_WPF_App
             InitializeComponent();
             LoadCommands();
             DisplayAllCommands();
-
+            //Закрытие по ESC
+            this.PreviewKeyDown += BtnCloseHelp_Click;
             // Добавляем обработчик поиска по Enter
             txtSearch.KeyDown += (s, e) =>
             {
@@ -371,6 +372,10 @@ namespace SQL_WPF_App
             txtSearch.Clear();
             DisplayAllCommands();
             txtTip.Text = "💡 Совет: Нажмите на любую команду в справке, чтобы скопировать её в буфер обмена";
+        }
+        private void BtnCloseHelp_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
         }
     }
 
