@@ -241,13 +241,6 @@ SQL Interpreter - Справка
   DROP TABLE <имя>;
   EXIT;
 
-Типы данных: C(n), D, L, M, N(n,d)
-Логические операторы: AND, OR, XOR, NOT
-";
-            MessageBox.Show(helpText, "Справка", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        */
-        //Приличная версия
         private void HelpItem_Click(object sender, RoutedEventArgs e)
         {
             var formHelp = new FormHelp();
