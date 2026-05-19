@@ -36,7 +36,7 @@ namespace SQL_WPF_App
 
                 if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
                 {
-                    var dt = ParseResultToDataTable(result);
+                    var dt = FormDataView.ParseResultToDataTable(result, _model.GetTableStructure());
                     dgvOutput.ItemsSource = dt.DefaultView;
                 }
                 else
@@ -61,30 +61,6 @@ namespace SQL_WPF_App
         private void BtnClose_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
-        }
-
-        private DataTable ParseResultToDataTable(string result)
-        {
-            var dt = new DataTable();
-            if (string.IsNullOrWhiteSpace(result))
-                return dt;
-
-            var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2)
-                return dt;
-
-            string[] headers = lines[0].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var header in headers)
-                dt.Columns.Add(header);
-
-            for (int i = 2; i < lines.Length; i++)
-            {
-                var values = lines[i].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (values.Length == headers.Length)
-                    dt.Rows.Add(values);
-            }
-
-            return dt;
         }
     }
 }

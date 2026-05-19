@@ -144,10 +144,15 @@ namespace SQL_ConsoleApp.Model
 
             throw new Exception("Неизвестная команда");
         }
-        public List<(string Name, char Type, int Length, int Precision, bool NotNull)> GetTableStructure(string tableName)
+        public List<(string Name, char Type, int Length, int Precision, bool NotNull)> GetTableStructure()
         {
-            var manager = Files.TableManager.Open($"{tableName}.dbf");
-            return manager.GetFields();
+            if (_currentTable == null)
+                throw new Exception("Не открыто ни одной таблицы. Невозможно получить структуру.");
+            return _currentTable.GetFields();
+        }
+        public string GetTableName()
+        {
+            return _currentTableName;
         }
         public void CloseTable()
         {

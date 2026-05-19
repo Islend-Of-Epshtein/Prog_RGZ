@@ -13,7 +13,7 @@ namespace SQL_ConsoleApp.Commands
 
         private static readonly Regex SET_PATTERN = new Regex(
             @"^\s*(?<field>\w+)\s*=\s*(?<value>" +
-            @"\d+(?:\.\d+)?|TRUE|FALSE|T|F|N|Y|\?|""[^""]*""|\d\d(\.|,|\\|/)\d\d\1\d\d\d\d|\d\d\d\d(\.|,|\\|/)\d\d\1\d\d)\s*$",
+            @"\d+(?:\.\d+)?|TRUE|FALSE|T|F|N|Y|\?|NULL|""[^""]*""|\d\d(\.|,|\\|/)\d\d\1\d\d\d\d|\d\d\d\d(\.|,|\\|/)\d\d\1\d\d)\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
         private readonly Match _regex;
@@ -55,9 +55,10 @@ namespace SQL_ConsoleApp.Commands
             // Нормализуем логические значения (без кавычек)
             if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y" || upperValue == "1")
                 return "TRUE";
-            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N" || upperValue == "0" || upperValue == "?")
+            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N" || upperValue == "0")
                 return "FALSE";
-
+            if (upperValue == "NULL")
+                return "";
             return value;
         }
         public string GetTableName() => _regex.Groups["tableName"].Value;

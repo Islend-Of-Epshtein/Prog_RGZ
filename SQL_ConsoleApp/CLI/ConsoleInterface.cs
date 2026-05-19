@@ -60,11 +60,22 @@ namespace SQL_ConsoleApp.CLI
                         break;
                     }
 
+                    // Проверяем, нужно ли подтверждение для команды
+                    if (NeedConfirmation(fullCommand))
+                    {
+                        Console.Write("Предупреждение: эта операция может изменить структуру таблицы или удалить данные. Продолжить? (Y/N): ");
+                        string answer = Console.ReadLine()?.Trim().ToUpper();
+                        if (answer != "Y" && answer != "YES")
+                        {
+                            Console.WriteLine("Операция отменена.");
+                            continue;
+                        }
+                    }
+
                     string result = _model.ExecuteCommand(fullCommand);
                     if (!string.IsNullOrEmpty(result))
                     {
                         Console.WriteLine(result);
-                        // Сохраняем в историю (опционально)
                         _outputHistory.AppendLine(result);
                     }
                 }
@@ -75,6 +86,17 @@ namespace SQL_ConsoleApp.CLI
                     _outputHistory.AppendLine(errorMsg);
                 }
             }
+        }
+
+        private static bool NeedConfirmation(string command)
+        {
+            string upperCommand = command.ToUpperInvariant();
+
+            // Команды, требующие подтверждения
+            return upperCommand.Contains("ALTER TABLE") ||
+                   upperCommand.Contains("DROP TABLE") ||
+                   upperCommand.Contains("TRUNCATE") ||
+                   (upperCommand.Contains("DELETE FROM") && !upperCommand.Contains("WHERE"));
         }
 
         private static void HandleHelp(string command)

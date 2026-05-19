@@ -57,6 +57,10 @@ namespace SQL_ConsoleApp.Files
                 if (val == "?") return "NULL";
                 return val;
             }
+            if (value.Trim().Equals("NULL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
             return value?.Trim() ?? "";
         }
 
@@ -116,10 +120,21 @@ namespace SQL_ConsoleApp.Files
             }
             if (field.Type == 'N')
             {
+                value=value.Replace('.', ',');
                 if (double.TryParse(value, out double num))
                 {
-                    string formatted = num.ToString("F" + field.DecimalCount);
-                    return formatted.PadLeft(field.Length).Substring(0, field.Length);
+                    // Используем InvariantCulture для точки в качестве разделителя
+                    string formatted = num.ToString($"F{field.DecimalCount}", System.Globalization.CultureInfo.InvariantCulture);
+                    
+                    if (formatted.Length > field.Length)
+                    {
+                        formatted = formatted.Substring(0, field.Length);
+                    }
+                    else
+                    {
+                        formatted = formatted.PadLeft(field.Length);
+                    }
+                    return formatted;
                 }
                 return new string(' ', field.Length);
             }
@@ -143,7 +158,10 @@ namespace SQL_ConsoleApp.Files
 
                 return "?"; // NULL значение
             }
-
+            if (value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+            {
+                return "";
+            }
             return value;
         }
 
@@ -183,12 +201,12 @@ namespace SQL_ConsoleApp.Files
             }
         }
 
-        public Dictionary<string, object> ToDictionary(List<DbfField> fields)
+        public Dictionary<string, (object, char)> ToDictionary(List<DbfField> fields)
         {
-            var dict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            var dict = new Dictionary<string, (object, char)>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < fields.Count; i++)
             {
-                dict[fields[i].Name.TrimEnd('\0')] = _values[i].Trim();
+                dict[fields[i].Name.TrimEnd('\0')] = (_values[i].Trim(), fields[i].Type);
             }
             return dict;
         }

@@ -104,6 +104,10 @@ namespace SQL_ConsoleApp.Files
                 if (colIndex >= 0)
                 {
                     string value = values[colIndex];
+                    if ( value.Trim().Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = GetDefaultValue(_header.Fields[colIndex]);
+                    }
                     record.SetValue(i, value, field, _dbtManager);
                 }
                 else if (field.NotNull)
@@ -190,6 +194,7 @@ namespace SQL_ConsoleApp.Files
             if (index == -1)
                 throw new Exception($"Поле '{update.GetRowName()}' не найдено");
 
+            var oldField = _header.Fields[index];
             var newField = new DbfField
             {
                 Name = update.GetRowName().PadRight(11, '\0'),
@@ -200,35 +205,162 @@ namespace SQL_ConsoleApp.Files
                 NotNull = update.IsNotNull()
             };
 
+            // Проверка NOT NULL перед преобразованием
+            if (newField.NotNull)
+            {
+                foreach (var record in _records)
+                {
+                    if (record.IsDeleted) continue;
+                    string oldValue = record.GetValue(index);
+                    string convertedValue = TryConvertValue(oldValue, oldField, newField);
+
+                    // Если после преобразования значение пустое и поле NOT NULL - ошибка
+                    if (string.IsNullOrWhiteSpace(convertedValue) || convertedValue.Trim() == new string(' ', newField.Length))
+                    {
+                        throw new Exception($"Поле '{update.GetRowName()}' NOT NULL не может быть пустым после преобразования. Запись #{_records.IndexOf(record) + 1} содержит недопустимое значение.");
+                    }
+                }
+            }
+
+            // Преобразуем значения для всех записей
             foreach (var record in _records)
             {
                 string oldValue = record.GetValue(index);
-                string newValue = ConvertType(oldValue, _header.Fields[index], newField);
+                string newValue = ConvertValue(oldValue, oldField, newField);
                 record.SetValue(index, newValue, newField, _dbtManager);
             }
 
+            // Обновляем структуру
             _header.Fields[index] = newField;
             _header.RecordLength = DbfHeader.CalculateRecordLength(_header.Fields);
             Save();
         }
 
-        private string ConvertType(string oldValue, DbfField oldField, DbfField newField)
+        private string TryConvertValue(string oldValue, DbfField oldField, DbfField newField)
         {
-            // Упрощённое преобразование типов
-            if (newField.NotNull && string.IsNullOrWhiteSpace(oldValue))
-                throw new Exception($"Поле '{newField.Name}' NOT NULL не может быть пустым");
-
-            if (newField.Type == oldField.Type)
-                return oldValue;
-
-            // Попытка преобразования
-            if (newField.Type == 'N' && oldField.Type == 'C')
+            try
             {
-                if (double.TryParse(oldValue.Trim(), out double num))
-                    return num.ToString().PadLeft(newField.Length);
+                return ConvertValue(oldValue, oldField, newField);
+            }
+            catch
+            {
+                // Если преобразование невозможно, возвращаем значение по умолчанию
+                return GetDefaultValue(newField);
+            }
+        }
+
+        private string ConvertValue(string oldValue, DbfField oldField, DbfField newField)
+        {
+            string trimmedValue = oldValue?.Trim() ?? "";
+
+            // Если тип не меняется, возвращаем как есть
+            if (newField.Type == oldField.Type)
+            {
+                // Но нужно обрезать/дополнить до новой длины
+                if (newField.Type == 'C')
+                {
+                    if (trimmedValue.Length > newField.Length)
+                        return trimmedValue.Substring(0, newField.Length);
+                    else
+                        return trimmedValue.PadRight(newField.Length);
+                }
+                return oldValue;
             }
 
-            return new string(' ', newField.Length);
+            // Преобразования типов согласно методичке
+            switch (newField.Type)
+            {
+                case 'N': // Преобразование в число
+                    if (oldField.Type == 'C')
+                    {
+                        // Строка -> число
+                        if (double.TryParse(trimmedValue, out double num))
+                        {
+                            string formatted = num.ToString("F" + newField.DecimalCount);
+                            return formatted.PadLeft(newField.Length);
+                        }
+                        return new string(' ', newField.Length);
+                    }
+                    else if (oldField.Type == 'L')
+                    {
+                        // Логическое -> число (TRUE=1, FALSE=0)
+                        if (trimmedValue == "T")
+                        {
+                            string formatted = "1".PadLeft(newField.Length);
+                            return formatted;
+                        }
+                        else if (trimmedValue == "F")
+                        {
+                            string formatted = "0".PadLeft(newField.Length);
+                            return formatted;
+                        }
+                        return new string(' ', newField.Length);
+                    }
+                    else if (oldField.Type == 'N')
+                    {
+                        // Число -> число (изменение точности)
+                        if (double.TryParse(trimmedValue, out double num))
+                        {
+                            string formatted = num.ToString("F" + newField.DecimalCount);
+                            return formatted.PadLeft(newField.Length);
+                        }
+                        return new string(' ', newField.Length);
+                    }
+                    break;
+
+                case 'C': // Преобразование в строку
+                    if (oldField.Type == 'N')
+                    {
+                        // Число -> строка
+                        string numStr = trimmedValue.Trim();
+                        if (numStr.Length > newField.Length)
+                            return numStr.Substring(0, newField.Length);
+                        else
+                            return numStr.PadRight(newField.Length);
+                    }
+                    else if (oldField.Type == 'L')
+                    {
+                        // Логическое -> строка
+                        string boolStr = trimmedValue == "T" ? "TRUE" : "FALSE";
+                        if (boolStr.Length > newField.Length)
+                            return boolStr.Substring(0, newField.Length);
+                        else
+                            return boolStr.PadRight(newField.Length);
+                    }
+                    break;
+
+                case 'L': // Преобразование в логический тип
+                    if (oldField.Type == 'N')
+                    {
+                        // Число -> логическое (значение>0 = TRUE)
+                        if (double.TryParse(trimmedValue, out double num))
+                        {
+                            return num > 0 ? "T" : "F";
+                        }
+                        return "F";
+                    }
+                    else if (oldField.Type == 'C')
+                    {
+                        // Строка -> логическое
+                        string upper = trimmedValue.ToUpperInvariant();
+                        if (upper == "TRUE" || upper == "T" || upper == "Y" || upper == "1")
+                            return "T";
+                        return "F";
+                    }
+                    break;
+
+                case 'D': // Преобразование в дату
+                    if (oldField.Type == 'C')
+                    {
+                        if (DateTime.TryParse(trimmedValue, out DateTime date))
+                            return date.ToString("yyyyMMdd");
+                        return "        ";
+                    }
+                    break;
+            }
+
+            // Если преобразование не предусмотрено или не удалось - значение по умолчанию
+            return GetDefaultValue(newField);
         }
 
         public int Update(UpdateCommand update)

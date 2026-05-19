@@ -9,7 +9,6 @@ namespace SQL_WPF_App
     public partial class MainWindow : Window
     {
         private DatabaseModel _model;
-        private string _currentTableName;
 
         public MainWindow()
         {
@@ -41,7 +40,6 @@ namespace SQL_WPF_App
                     command += ");";
 
                     string result = _model.ExecuteCommand(command);
-                    _currentTableName = tableName;
                     MessageBox.Show(result, "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     RefreshData();
                 }
@@ -65,7 +63,6 @@ namespace SQL_WPF_App
                 {
                     string command = $"OPEN {ofd.FileName};";
                     string result = _model.ExecuteCommand(command);
-                    _currentTableName = System.IO.Path.GetFileNameWithoutExtension(ofd.FileName);
                     MessageBox.Show(result, "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     RefreshData();
                 }
@@ -78,7 +75,7 @@ namespace SQL_WPF_App
 
         private void StructureItem_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentTableName))
+            if (_model==null)
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -87,32 +84,124 @@ namespace SQL_WPF_App
             try
             {
                 // Получаем структуру таблицы из DBF (включая NOT NULL)
-                var fields = _model.GetTableStructure(_currentTableName);
-                var form = new FormCreateTable(_currentTableName, fields);
+                var fields = _model.GetTableStructure();
+                var form = new FormCreateTable(_model.GetTableName(), fields);
+
                 form.TableStructureChanged += (newName, oldName, newRows) =>
                 {
                     try
                     {
-                        // Удаляем старую таблицу
-                        _model.ExecuteCommand($"DROP TABLE {oldName};");
-                        // Создаём новую с обновлённой структурой
-                        string createCmd = $"CREATE TABLE {newName} (";
-                        for (int i = 0; i < newRows.Length; i++)
+                        // Подтверждение перед изменением структуры
+                        var result = MessageBox.Show(
+                            $"Вы уверены, что хотите изменить структуру таблицы '{oldName}'?\n\n" +
+                            "Внимание: Эта операция может привести к потере данных при изменении типов полей!",
+                            "Подтверждение изменения структуры",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning);
+
+                        if (result != MessageBoxResult.Yes)
+                            return;
+
+                        var oldDict = fields.ToDictionary(f => f.Name, f => f);
+                        var newDict = newRows.ToDictionary(r => r.Name, r => r);
+
+                        // Находим переименованные столбцы (похожие типы, но разные имена)
+                        var renamedColumns = new List<(string OldName, string NewName)>();
+
+                        foreach (var newRow in newRows)
                         {
-                            var row = newRows[i];
-                            createCmd += $"{row.Name} {row.Type}";
-                            if (row.Type == 'C')
-                                createCmd += $"({row.Width})";
-                            else if (row.Type == 'N')
-                                createCmd += $"({row.Width},{row.Precision})";
-                            if (row.IsNotNull)
-                                createCmd += " NOT NULL";
-                            if (i < newRows.Length - 1)
-                                createCmd += ", ";
+                            if (!oldDict.ContainsKey(newRow.Name))
+                            {
+                                // Ищем похожий старый столбец с таким же типом и длиной
+                                var possibleMatch = fields.FirstOrDefault(f =>
+                                    !newDict.ContainsKey(f.Name) &&
+                                    f.Type == newRow.Type &&
+                                    f.Length == newRow.Width &&
+                                    f.Precision == newRow.Precision);
+
+                                if (possibleMatch.Name != null)
+                                {
+                                    renamedColumns.Add((possibleMatch.Name, newRow.Name));
+                                }
+                            }
                         }
-                        createCmd += ");";
-                        _model.ExecuteCommand(createCmd);
-                        _currentTableName = newName;
+
+                        // 1. Переименовываем столбцы
+                        foreach (var rename in renamedColumns)
+                        {
+                            string renameCommand = $"ALTER TABLE {_model.GetTableName()} COLUMN RENAME {rename.OldName} {rename.NewName};";
+                            _model.ExecuteCommand(renameCommand);
+                        }
+
+                        // 2. Добавляем новые столбцы (те, что не являются переименованными)
+                        foreach (var newRow in newRows)
+                        {
+                            if (!oldDict.ContainsKey(newRow.Name) &&
+                                !renamedColumns.Any(r => r.NewName == newRow.Name))
+                            {
+                                string addCommand = $"ALTER TABLE {_model.GetTableName()} COLUMN ADD {newRow.Name} {newRow.Type}";
+                                if (newRow.Type == 'C')
+                                    addCommand += $"({newRow.Width})";
+                                else if (newRow.Type == 'N')
+                                    addCommand += $"({newRow.Width},{newRow.Precision})";
+                                if (newRow.IsNotNull)
+                                    addCommand += " NOT NULL";
+                                addCommand += ";";
+
+                                _model.ExecuteCommand(addCommand);
+                            }
+                        }
+
+                        // 3. Изменяем существующие столбцы
+                        foreach (var newRow in newRows)
+                        {
+                            string currentName = newRow.Name;
+
+                            // Если столбец был переименован, используем старое имя для UPDATE
+                            var renamed = renamedColumns.FirstOrDefault(r => r.NewName == newRow.Name);
+                            if (renamed.OldName != null)
+                                currentName = renamed.OldName;
+
+                            if (oldDict.TryGetValue(currentName, out var oldRow))
+                            {
+                                if (oldRow.Type != newRow.Type ||
+                                    oldRow.Length != newRow.Width ||
+                                    oldRow.Precision != newRow.Precision ||
+                                    oldRow.NotNull != newRow.IsNotNull)
+                                {
+                                    string updateCommand = $"ALTER TABLE {_model.GetTableName()} COLUMN UPDATE {currentName} {newRow.Type}";
+                                    if (newRow.Type == 'C')
+                                        updateCommand += $"({newRow.Width})";
+                                    else if (newRow.Type == 'N')
+                                        updateCommand += $"({newRow.Width},{newRow.Precision})";
+                                    if (newRow.IsNotNull)
+                                        updateCommand += " NOT NULL";
+                                    updateCommand += ";";
+
+                                    _model.ExecuteCommand(updateCommand);
+                                }
+                            }
+                        }
+
+                        // 4. Удаляем столбцы, которых нет в новой структуре (и которые не были переименованы)
+                        foreach (var oldRow in fields)
+                        {
+                            if (!newDict.ContainsKey(oldRow.Name) &&
+                                !renamedColumns.Any(r => r.OldName == oldRow.Name))
+                            {
+                                string removeCommand = $"ALTER TABLE {_model.GetTableName()} COLUMN REMOVE {oldRow.Name};";
+                                _model.ExecuteCommand(removeCommand);
+                            }
+                        }
+
+                        // 5. Переименовываем таблицу, если имя изменилось
+                        if (!string.Equals(newName, oldName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            System.IO.File.Move($"{oldName}.dbf", $"{newName}.dbf");
+                            if (System.IO.File.Exists($"{oldName}.dbt"))
+                                System.IO.File.Move($"{oldName}.dbt", $"{newName}.dbt");
+                        }
+
                         MessageBox.Show($"Структура таблицы '{oldName}' изменена.", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                         RefreshData();
                     }
@@ -131,17 +220,28 @@ namespace SQL_WPF_App
 
         private void ShrinkItem_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentTableName))
+            if (_model==null)
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
+            // Подтверждение перед TRUNCATE
+            var result = MessageBox.Show(
+                $"Вы уверены, что хотите выполнить TRUNCATE для таблицы '{_model.GetTableName()}'?\n\n" +
+                "Внимание: Эта операция безвозвратно удалит все помеченные записи!",
+                "Подтверждение очистки",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
             try
             {
-                string command = $"TRUNCATE {_currentTableName};";
-                string result = _model.ExecuteCommand(command);
-                MessageBox.Show(result, "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
+                string command = $"TRUNCATE {_model.GetTableName()};";
+                string resultMsg = _model.ExecuteCommand(command);
+                MessageBox.Show(resultMsg, "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshData();
             }
             catch (Exception ex)
@@ -155,7 +255,6 @@ namespace SQL_WPF_App
             try
             {
                 _model.CloseTable();
-                _currentTableName = null;
                 dgvResult.ItemsSource = null;
                 MessageBox.Show("Таблица закрыта", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -167,22 +266,25 @@ namespace SQL_WPF_App
 
         private void DropItem_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentTableName))
+            if (_model==null)
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var result = MessageBox.Show($"Удалить таблицу '{_currentTableName}'?", "Подтверждение",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
+            var result = MessageBox.Show(
+                $"Удалить таблицу '{_model.GetTableName()}'?\n\n" +
+                "Внимание: Эта операция безвозвратно удалит все данные!",
+                "Подтверждение удаления",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
 
             if (result == MessageBoxResult.Yes)
             {
                 try
                 {
-                    string command = $"DROP TABLE {_currentTableName};";
+                    string command = $"DROP TABLE {_model.GetTableName()};";
                     _model.ExecuteCommand(command);
-                    _currentTableName = null;
                     dgvResult.ItemsSource = null;
                     MessageBox.Show("Таблица удалена", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -195,13 +297,13 @@ namespace SQL_WPF_App
 
         private void DataItem_Click(object sender, RoutedEventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentTableName))
+            if (_model==null)
             {
                 MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var form = new FormDataView(_model, _currentTableName);
+            var form = new FormDataView(_model);
             form.DataChanged += RefreshData;
             form.ShowDialog();
         }
@@ -240,7 +342,7 @@ SQL Interpreter - Справка
   RESTORE <имя> [WHERE <условие>];
   DROP TABLE <имя>;
   EXIT;
-
+        */
         private void HelpItem_Click(object sender, RoutedEventArgs e)
         {
             var formHelp = new FormHelp();
@@ -250,43 +352,20 @@ SQL Interpreter - Справка
 
         private void RefreshData()
         {
-            if (string.IsNullOrEmpty(_currentTableName))
+            if (_model == null)
                 return;
 
             try
             {
-                string command = $"SELECT * FROM {_currentTableName};";
+                string command = $"SELECT * FROM {_model.GetTableName()};";
                 string result = _model.ExecuteCommand(command);
-                var dt = ParseResultToDataTable(result);
+                var dt = FormDataView.ParseResultToDataTable(result, _model.GetTableStructure());
                 dgvResult.ItemsSource = dt.DefaultView;
             }
             catch (Exception ex)
             {
                 dgvResult.ItemsSource = null;
             }
-        }
-
-        private DataTable ParseResultToDataTable(string result)
-        {
-            var dt = new DataTable();
-            if (string.IsNullOrWhiteSpace(result))
-                return dt;
-
-            var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2)
-                return dt;
-
-            string[] headers = lines[0].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var header in headers)
-                dt.Columns.Add(header);
-
-            for (int i = 2; i < lines.Length; i++)
-            {
-                var values = lines[i].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (values.Length == headers.Length)
-                    dt.Rows.Add(values);
-            }
-            return dt;
         }
     }
 }

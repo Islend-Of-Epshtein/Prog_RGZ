@@ -53,7 +53,7 @@ namespace SQL_ConsoleApp.Commands
     public class LogicExpressionParser
     {
         private static readonly Regex TOKEN_PATTERN = new Regex(
-            @"(AND|OR|XOR|NOT|\(|\)|TRUE|FALSE|""[^""]*""|" +
+            @"(AND|OR|XOR|NOT|\(|\)|TRUE|NULL|FALSE|""[^""]*""|" +
             @"\d{2}[.,\\\/\-]\d{2}[.,\\\/\-]\d{4}|\d{4}[.,\\\/\-]\d{2}[.,\\\/\-]\d{2}|" +
             @"\d+(?:\.\d+)?|\w+|[=<>]+)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
@@ -62,7 +62,7 @@ namespace SQL_ConsoleApp.Commands
         private static readonly Regex EXPRESSION_PATTERN = new Regex(
             @"^\s*(?<field>\w+)\s*(?<op>=|<>|<|>|<=|>=)\s*(?<value>" +
             @"\d\d[\.\\\/\-]\d\d[\.\\/-]\d\d\d\d|\d\d\d\d[\.\\/-]\d\d[\.\\/-]\d\d" +
-            @"|\d+(?:\.\d+)?|TRUE|FALSE|""[^""]*"")\s*$",
+            @"|\d+(?:\.\d+)?|TRUE|NULL|FALSE|""[^""]*"")\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
@@ -139,7 +139,6 @@ namespace SQL_ConsoleApp.Commands
             for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];
-
                 if (token == "(")
                     operators.Push(token);
                 else if (token == ")")
@@ -253,12 +252,12 @@ namespace SQL_ConsoleApp.Commands
             };
         }
 
-        public bool Evaluate(Dictionary<string, object> row)
+        public bool Evaluate(Dictionary<string, (object, char)> row)
         {
             return EvaluateNode(Root, row);
         }
 
-        private bool EvaluateNode(LogicalExpressionNode node, Dictionary<string, object> row)
+        private bool EvaluateNode(LogicalExpressionNode node, Dictionary<string, (object, char)> row)
         {
             if (node.IsElementary)
             {
@@ -266,9 +265,9 @@ namespace SQL_ConsoleApp.Commands
                 if (!row.ContainsKey(expr.RowName))
                     throw new Exception($"Поле '{expr.RowName}' не найдено");
 
-                object fieldValue = row[expr.RowName];
+                object fieldValue = row[expr.RowName].Item1;
 
-                object compareValue = ParseValue(expr.Value);
+                object compareValue = ParseValue(expr.Value, row[expr.RowName].Item2);
 
                 return expr.CompareOperator switch
                 {
@@ -295,23 +294,28 @@ namespace SQL_ConsoleApp.Commands
             };
         }
 
-        private object ParseValue(string value)
+        private object ParseValue(string value, char type)
         {
             
             string upperValue = value.ToUpperInvariant();
 
             if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y" )
                 return "T";
-            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N" || upperValue == "?")
+            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N")
                 return "F";
-
+            if (upperValue == "NULL")
+                if(type == 'L')
+                    return "?";
+                    else
+                    return "";
+            
             // Потом строки в кавычках
             if (value.StartsWith("\""))
                 return value.Trim('"');
 
             // Числа
             if (double.TryParse(value, out double dbl))
-                return dbl;
+                return value;
 
             // Даты
             if (DateTime.TryParse(value, out DateTime res))

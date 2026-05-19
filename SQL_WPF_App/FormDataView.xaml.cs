@@ -1,4 +1,5 @@
-﻿using SQL_ConsoleApp.Model;
+﻿using SQL_ConsoleApp.Files;
+using SQL_ConsoleApp.Model;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -12,18 +13,16 @@ namespace SQL_WPF_App
     public partial class FormDataView : Window
     {
         private DatabaseModel _model;
-        private string _tableName;
         private List<ColumnInfo> _columns;
         private DataTable _dataTable;
 
         public event Action DataChanged;
 
-        public FormDataView(DatabaseModel model, string tableName)
+        public FormDataView(DatabaseModel model)
         {
             InitializeComponent();
             _model = model;
-            _tableName = tableName;
-            this.Title = $"Интерпретатор SQL - Данные таблицы: {_tableName}";
+            this.Title = $"Интерпретатор SQL - Данные таблицы: {_model.GetTableName()}";
             LoadStructure();
             LoadData();
         }
@@ -34,7 +33,7 @@ namespace SQL_WPF_App
             try
             {
                 // Предполагаем, что в DatabaseModel есть метод GetTableStructure, возвращающий список с именами, типами, длинами, NOT NULL
-                var fields = _model.GetTableStructure(_tableName);
+                var fields = _model.GetTableStructure();
                 _columns = fields.Select(f => new ColumnInfo
                 {
                     Name = f.Name,
@@ -53,7 +52,7 @@ namespace SQL_WPF_App
                 // Пытаемся получить имена колонок через SELECT
                 try
                 {
-                    string result = _model.ExecuteCommand($"SELECT * FROM {_tableName} WHERE 1=0;");
+                    string result = _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()} WHERE 1=0;");
                     var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                     if (lines.Length > 0)
                     {
@@ -69,8 +68,8 @@ namespace SQL_WPF_App
         {
             try
             {
-                string result = _model.ExecuteCommand($"SELECT * FROM {_tableName};");
-                _dataTable = ParseResultToDataTable(result);
+                string result = _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()};");
+                _dataTable = ParseResultToDataTable(result, _model.GetTableStructure());
                 dgvData.ItemsSource = _dataTable.DefaultView;
                 dgvData.AutoGenerateColumns = true;
             }
@@ -100,17 +99,16 @@ namespace SQL_WPF_App
                     MessageBox.Show(error, "Ошибка валидации", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
-                if (values.Keys.Count != values.Values.Count) 
+                if (values.Keys.Count != values.Values.Count)
                 {
                     MessageBox.Show(error, "Количество имен != количеству значений", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
                 string columns = string.Join(", ", values.Keys);
                 string vals = string.Join(", ", values.Values.Select(v => FormatValue(v)));
-                string command = $"INSERT INTO {_tableName} ({columns}) VALUE ({vals});";
+                string command = $"INSERT INTO {_model.GetTableName()} ({columns}) VALUE ({vals});";
                 try
                 {
-                    MessageBox.Show($"{command}", "Пол Успеха", MessageBoxButton.OK, MessageBoxImage.Information);
                     _model.ExecuteCommand(command);
                     MessageBox.Show("Запись добавлена", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     LoadData();
@@ -146,7 +144,7 @@ namespace SQL_WPF_App
             {
                 var newValues = (Dictionary<string, object>)dialog.Tag;
                 string error = ValidateValues(newValues);
-                
+
                 if (error != null)
                 {
                     MessageBox.Show(error, "Ошибка валидации", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -155,10 +153,10 @@ namespace SQL_WPF_App
 
                 string setClause = string.Join(", ", newValues.Select(kv => $"{kv.Key} = {FormatValue(kv.Value)}"));
                 string whereClause = BuildWhereClause(oldValues);
-                string command = $"UPDATE {_tableName} SET {setClause} WHERE {whereClause};";
+                string command = $"UPDATE {_model.GetTableName()} SET {setClause} WHERE {whereClause};";
                 try
                 {
-                    
+
                     _model.ExecuteCommand(command);
                     MessageBox.Show("Запись обновлена", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     LoadData();
@@ -193,7 +191,7 @@ namespace SQL_WPF_App
             }
 
             string whereClause = BuildWhereClause(values);
-            string command = $"DELETE FROM {_tableName} WHERE {whereClause};";
+            string command = $"DELETE FROM {_model.GetTableName()} WHERE {whereClause};";
             try
             {
                 _model.ExecuteCommand(command);
@@ -222,7 +220,8 @@ namespace SQL_WPF_App
         {
             var dialog = new Window
             {
-                Title = oldValues == null ? $"Добавление записи в {_tableName}" : $"Редактирование записи в {_tableName}",
+                Title = oldValues == null ? $"Добавление записи в {_model.GetTableName()}" 
+                                          : $"Редактирование записи в {_model.GetTableName()}",
                 SizeToContent = SizeToContent.WidthAndHeight,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = this,
@@ -254,7 +253,7 @@ namespace SQL_WPF_App
                 fields[col.Name] = tb;
             }
 
-           
+
 
             var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
             var okBtn = new Button { Content = "OK", Width = 75, Margin = new Thickness(5) };
@@ -265,7 +264,7 @@ namespace SQL_WPF_App
             stack.Children.Add(info);
             stack.Children.Add(buttonPanel);
             dialog.Content = stack;
-           
+
             okBtn.Click += (s, e) =>
             {
                 var result = new Dictionary<string, object>();
@@ -309,8 +308,11 @@ namespace SQL_WPF_App
                             return $"Поле '{col.Name}' (C) не может быть длиннее {col.Length} символов.";
                         break;
                     case 'N':
-                        if (!decimal.TryParse(strValue, out decimal num))
+                        string normalizedValue = strValue.Replace('.', ',');
+                        if (!double.TryParse(normalizedValue, out double num))
+                        {
                             return $"Поле '{col.Name}' (N) должно быть числом.";
+                        }
                         break;
                     case 'D':
                         if (!DateTime.TryParse(strValue, out _))
@@ -322,7 +324,7 @@ namespace SQL_WPF_App
                                        upperVal == "FALSE" || upperVal == "F" ||
                                        upperVal == "Y" || upperVal == "N" ||
                                        upperVal == "?";
-                                       
+
                         if (!isValid)
                             return $"Поле '{col.Name}' (L) должно быть TRUE/FALSE, T/F, Y/N или ?";
                         break;
@@ -339,12 +341,18 @@ namespace SQL_WPF_App
         private string FormatValue(object val)
         {
             if (val == null || string.IsNullOrEmpty(val.ToString()))
-                return "";
+                return "NULL";
             string str = val.ToString().Trim();
-            if (double.TryParse(str, out _))
-                return str;
+            // Используем InvariantCulture, где разделитель - точка
+            string num = str.Replace('.', ',');
+            if (double.TryParse(num,
+                out double _))
+            {
+                num = num.Replace(',', '.');
+                return num;
+            }
             string upperStr = str.ToUpperInvariant();
-            if (upperStr == "TRUE" || upperStr == "T" || upperStr == "Y" 
+            if (upperStr == "TRUE" || upperStr == "T" || upperStr == "Y" || upperStr == "NULL"
                 || upperStr == "FALSE" || upperStr == "F" || upperStr == "N" || upperStr == "?")
                 return str;
             if (DateTime.TryParse(str, out _))
@@ -361,21 +369,18 @@ namespace SQL_WPF_App
             foreach (var kv in values)
             {
                 if (kv.Value == null || string.IsNullOrEmpty(kv.Value.ToString()))
-                    conditions.Add($"{kv.Key} IS NULL");
+                    conditions.Add($"{kv.Key} = NULL");
                 else
                     conditions.Add($"{kv.Key} = {FormatValue(kv.Value)}");
             }
             return string.Join(" AND ", conditions);
         }
 
-        private DataTable ParseResultToDataTable(string result)
+        public static DataTable ParseResultToDataTable(string result, List<(string Name, char Type, int Length, int Precision, bool NotNull)> structure)
         {
             var dt = new DataTable();
             if (string.IsNullOrWhiteSpace(result))
                 return dt;
-
-            // Получаем структуру таблицы
-            var structure = _model.GetTableStructure(_tableName);
 
             // Разбиваем на строки
             var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -445,7 +450,7 @@ namespace SQL_WPF_App
             return dt;
         }
 
-        private string FormatValueByType(string value, char type)
+        private static string FormatValueByType(string value, char type)
         {
             if (string.IsNullOrEmpty(value))
                 return value;
@@ -453,15 +458,28 @@ namespace SQL_WPF_App
             switch (type)
             {
                 case 'D': // Дата — добавляем разделители
-                    if (value.Length == 8)
-                        return $"{value.Substring(0, 4)}.{value.Substring(4, 4)}.{value.Substring(6, 6)}";
+                    if (value.Length == 8 && System.Text.RegularExpressions.Regex.IsMatch(value, @"^\d{8}$"))
+                        return $"{value.Substring(0, 4)}.{value.Substring(4, 2)}.{value.Substring(6, 2)}";
                     return value;
 
-                case 'C': // Символьный — закавычиваем
-                case 'M': // Memo — закавычиваем
-                    return $"\"{value}\"";
+                case 'N': // Число — нормализуем разделитель
+                    string normalized = value.Replace(',', '.');
+                    if (double.TryParse(normalized,
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out double num))
+                    {
+                        return num.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                    return value;
 
-                default: // N, L и другие — как есть
+                case 'L': // Логический
+                    if (value == "T") return "TRUE";
+                    if (value == "F") return "FALSE";
+                    if (value == "?") return "NULL";
+                    return value;
+
+                default: // C, M и другие
                     return value;
             }
         }

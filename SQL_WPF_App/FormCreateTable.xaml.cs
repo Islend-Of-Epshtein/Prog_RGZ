@@ -31,7 +31,7 @@ namespace SQL_WPF_App
 
             txtTableName.Text = tableName;
             txtTableName.IsReadOnly = false;
-            this.Title = "Интерпретатор SQL - структура таблицы";
+            this.Title = $"Интерпретатор SQL - структура таблицы {tableName}";
 
             foreach (var field in fields)
                 AddColumnRow(field.Name, field.Type, field.Length, field.Precision, field.NotNull);

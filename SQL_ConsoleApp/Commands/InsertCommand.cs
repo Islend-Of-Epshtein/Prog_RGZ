@@ -44,7 +44,6 @@ namespace SQL_ConsoleApp.Commands
 
         private List<string> SplitValues(string valuesStr)
         {
-            valuesStr.Replace("\"", "");
             var result =valuesStr.Split(",").ToList();
             return result;
         }
