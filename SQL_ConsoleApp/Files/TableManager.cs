@@ -11,15 +11,14 @@ namespace SQL_ConsoleApp.Files
     public class TableManager
     {
         private readonly string _filePath;
-        private DbfHeader _header;
-        private List<DbfRecord> _records;
-        private DbtManager _dbtManager;
+        private DbfHeader? _header;
+        private List<DbfRecord>? _records;
+        private DbtManager? _dbtManager;
 
         public TableManager(string filePath)
         {
             _filePath = filePath;
         }
-
         public static TableManager Create(string tableName, RowDefinition[] rows)
         {
             string filePath = $"{tableName}.dbf";
@@ -30,7 +29,6 @@ namespace SQL_ConsoleApp.Files
             manager.Save();
             return manager;
         }
-
         public static TableManager Open(string filePath)
         {
             if (!File.Exists(filePath))
@@ -40,7 +38,6 @@ namespace SQL_ConsoleApp.Files
             manager.Load();
             return manager;
         }
-
         public static void Drop(string tableName)
         {
             string dbfPath = $"{tableName}.dbf";
@@ -51,7 +48,6 @@ namespace SQL_ConsoleApp.Files
             if (File.Exists(dbtPath))
                 File.Delete(dbtPath);
         }
-
         private void Load()
         {
             using (var reader = new BinaryReader(File.OpenRead(_filePath), Encoding.ASCII))
@@ -63,7 +59,6 @@ namespace SQL_ConsoleApp.Files
             if (HasMemoField())
                 _dbtManager = DbtManager.Open(Path.GetFileNameWithoutExtension(_filePath));
         }
-
         public void Save()
         {
             using (var writer = new BinaryWriter(File.Create(_filePath), Encoding.ASCII))
@@ -76,7 +71,6 @@ namespace SQL_ConsoleApp.Files
             if (_dbtManager != null)
                 _dbtManager.Save();
         }
-
         public void Close()
         {
             Save();
@@ -85,7 +79,6 @@ namespace SQL_ConsoleApp.Files
             _header = null;
             _dbtManager = null;
         }
-
         private bool HasMemoField()
         {
             return _header.Fields.Any(f => f.Type == 'M');
@@ -94,8 +87,7 @@ namespace SQL_ConsoleApp.Files
         {
             return _header.Fields.Select(f => (f.Name.TrimEnd('\0'), f.Type, f.Length, (int)f.DecimalCount, f.NotNull)).ToList();
         }
-        public int GetRecordCount() => _records.Count;
-
+        public int GetRecordCount() => _records?.Count ?? 0;
         public void Insert(List<string> columns, List<string> values)
         {
             var record = new DbfRecord(_header.Fields.Count);
@@ -127,42 +119,43 @@ namespace SQL_ConsoleApp.Files
             _records.Add(record);
             _header.RecordCount = _records.Count;
         }
-
         private string GetDefaultValue(DbfField field)
         {
             return field.Type switch
             {
-                'C' => new string(' ', field.byteLenght),
-                'N' => new string(' ', field.byteLenght),
+                'C' => new string(' ', field.Length),
+                'N' => new string(' ', field.Length),
                 'D' => "        ",
                 'L' => "?",
                 'M' => "          ",
                 _ => ""
             };
         }
-
         public void AddColumn(AlterAdd add)
         {
             var newField = new DbfField
             {
                 Name = add.GetRowName().PadRight(11, '\0'),
                 Type = add.GetType(),
-                Length = add.GetType() == 'C' ? int.Parse(add.GetWidth()) :
-                         add.GetType() == 'N' ? int.Parse(add.GetWidth()) : 0,
-                DecimalCount = add.GetType() == 'N' ? byte.Parse(add.GetPrecision()) : (byte)0,
-                NotNull = add.IsNotNull(),
-                byteLenght = add.GetType() switch
+                Length = add.GetType() switch
                 {
                     'C' => int.Parse(add.GetWidth()),
                     'N' => int.Parse(add.GetWidth()),
                     'D' => 8,
                     'L' => 1,
-                    'M' => 1,
-                    _ => 1
-                }
+                    'M' => 10,
+                    _ => 0
+                },
+                DecimalCount = add.GetType() == 'N' ? byte.Parse(add.GetPrecision()) : (byte)0,
+                NotNull = add.IsNotNull(),
             };
-
             _header.Fields.Add(newField);
+            if (newField.Type == 'M') 
+            {
+                if (_dbtManager != null) throw new Exception("Memo поле уже существует");
+                _dbtManager = DbtManager.Create(_filePath);
+                _header.Version = 0x83; 
+            }
             _header.HeaderLength = DbfHeader.CalculateHeaderLength(_header.Fields.Count);
             _header.RecordLength = DbfHeader.CalculateRecordLength(_header.Fields);
 
@@ -174,12 +167,14 @@ namespace SQL_ConsoleApp.Files
 
             Save();
         }
-
         public void RemoveColumn(string columnName)
         {
             int index = _header.Fields.FindIndex(f => f.Name.TrimEnd('\0').Equals(columnName, StringComparison.OrdinalIgnoreCase));
             if (index == -1)
                 throw new Exception($"Поле '{columnName}' не найдено");
+
+            // Проверяем, является ли удаляемое поле MEMO полем
+            bool isMemoField = _header.Fields[index].Type == 'M';
 
             _header.Fields.RemoveAt(index);
             _header.HeaderLength = DbfHeader.CalculateHeaderLength(_header.Fields.Count);
@@ -188,9 +183,33 @@ namespace SQL_ConsoleApp.Files
             foreach (var record in _records)
                 record.RemoveField(index);
 
+            // Если удалили MEMO поле, меняем версию и удаляем DBT файл
+            if (isMemoField)
+            {
+                _header.Version = 0x03;
+
+                // Закрываем и удаляем DBT файл
+                if (_dbtManager != null)
+                {
+                    _dbtManager = null;
+                }
+
+                string dbtPath = Path.ChangeExtension(_filePath, ".dbt");
+                if (File.Exists(dbtPath))
+                {
+                    try
+                    {
+                        File.Delete(dbtPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new Exception($"Не удалось удалить MEMO файл: {ex.Message}");
+                    }
+                }
+            }
+
             Save();
         }
-
         public void RenameColumn(string oldName, string newName)
         {
             var field = _header.Fields.Find(f => f.Name.TrimEnd('\0').Equals(oldName, StringComparison.OrdinalIgnoreCase));
@@ -200,7 +219,6 @@ namespace SQL_ConsoleApp.Files
             field.Name = newName.PadRight(11, '\0');
             Save();
         }
-
         public void UpdateColumn(AlterUpdate update)
         {
             int index = _header.Fields.FindIndex(f => f.Name.TrimEnd('\0').Equals(update.GetRowName(), StringComparison.OrdinalIgnoreCase));
@@ -212,19 +230,17 @@ namespace SQL_ConsoleApp.Files
             {
                 Name = update.GetRowName().PadRight(11, '\0'),
                 Type = update.GetType(),
-                Length = update.GetType() == 'C' ? int.Parse(update.GetWidth()) :
-                         update.GetType() == 'N' ? int.Parse(update.GetWidth()) : 0,
-                DecimalCount = update.GetType() == 'N' ? byte.Parse(update.GetPrecision()) : (byte)0,
-                NotNull = update.IsNotNull(),
-                byteLenght = update.GetType() switch
+                Length = update.GetType() switch
                 {
                     'C' => int.Parse(update.GetWidth()),
                     'N' => int.Parse(update.GetWidth()),
                     'D' => 8,
                     'L' => 1,
-                    'M' => 1,
+                    'M' => 10,
                     _ => 1
-                }
+                },
+                DecimalCount = update.GetType() == 'N' ? byte.Parse(update.GetPrecision()) : (byte)0,
+                NotNull = update.IsNotNull(),
             };
 
             // Проверка NOT NULL перед преобразованием
@@ -237,7 +253,7 @@ namespace SQL_ConsoleApp.Files
                     string convertedValue = TryConvertValue(oldValue, oldField, newField);
 
                     // Если после преобразования значение пустое и поле NOT NULL - ошибка
-                    if (string.IsNullOrWhiteSpace(convertedValue) || convertedValue.Trim() == new string(' ', newField.byteLenght))
+                    if (string.IsNullOrWhiteSpace(convertedValue) || convertedValue.Trim() == new string(' ', newField.Length))
                     {
                         throw new Exception($"Поле '{update.GetRowName()}' NOT NULL не может быть пустым после преобразования. Запись #{_records.IndexOf(record) + 1} содержит недопустимое значение.");
                     }
@@ -247,7 +263,7 @@ namespace SQL_ConsoleApp.Files
             // Преобразуем значения для всех записей
             foreach (var record in _records)
             {
-                string oldValue = record.GetValue(index);
+                string oldValue = record.GetDisplayValue(index, oldField, _dbtManager);
                 string newValue = ConvertValue(oldValue, oldField, newField);
                 record.SetValue(index, newValue, newField, _dbtManager);
             }
@@ -257,7 +273,6 @@ namespace SQL_ConsoleApp.Files
             _header.RecordLength = DbfHeader.CalculateRecordLength(_header.Fields);
             Save();
         }
-
         private string TryConvertValue(string oldValue, DbfField oldField, DbfField newField)
         {
             try
@@ -270,21 +285,27 @@ namespace SQL_ConsoleApp.Files
                 return GetDefaultValue(newField);
             }
         }
-
         private string ConvertValue(string oldValue, DbfField oldField, DbfField newField)
         {
             string trimmedValue = oldValue?.Trim() ?? "";
-
+            if ((newField.Type == 'M' || oldField.Type == 'M' ) && oldField.Type!= newField.Type)
+            {
+                throw new Exception("Нельзя преобразовывать MEMO поля!");
+            }
             // Если тип не меняется, возвращаем как есть
             if (newField.Type == oldField.Type)
             {
                 // Но нужно обрезать/дополнить до новой длины
                 if (newField.Type == 'C')
                 {
-                    if (trimmedValue.Length > newField.byteLenght)
-                        return trimmedValue.Substring(0, newField.byteLenght);
+                    if (trimmedValue.Length > newField.Length)
+                        return trimmedValue.Substring(0, newField.Length);
                     else
-                        return trimmedValue.PadRight(newField.byteLenght);
+                        return trimmedValue.PadRight(newField.Length);
+                }
+                if (newField.Type == 'M')
+                {
+                      return _dbtManager?.GetText(oldValue) ?? GetDefaultValue(oldField);
                 }
                 return oldValue;
             }
@@ -299,24 +320,24 @@ namespace SQL_ConsoleApp.Files
                         if (double.TryParse(trimmedValue, out double num))
                         {
                             string formatted = num.ToString("F" + newField.DecimalCount);
-                            return formatted.PadLeft(newField.byteLenght);
+                            return formatted.PadLeft(newField.Length);
                         }
-                        return new string(' ', newField.byteLenght);
+                        return new string(' ', newField.Length);
                     }
                     else if (oldField.Type == 'L')
                     {
                         // Логическое -> число (TRUE=1, FALSE=0)
                         if (trimmedValue == "T")
                         {
-                            string formatted = "1".PadLeft(newField.byteLenght);
+                            string formatted = "1".PadLeft(newField.Length);
                             return formatted;
                         }
                         else if (trimmedValue == "F")
                         {
-                            string formatted = "0".PadLeft(newField.byteLenght);
+                            string formatted = "0".PadLeft(newField.Length);
                             return formatted;
                         }
-                        return new string(' ', newField.byteLenght);
+                        return new string(' ', newField.Length);
                     }
                     else if (oldField.Type == 'N')
                     {
@@ -324,9 +345,9 @@ namespace SQL_ConsoleApp.Files
                         if (double.TryParse(trimmedValue, out double num))
                         {
                             string formatted = num.ToString("F" + newField.DecimalCount);
-                            return formatted.PadLeft(newField.byteLenght);
+                            return formatted.PadLeft(newField.Length);
                         }
-                        return new string(' ', newField.byteLenght);
+                        return new string(' ', newField.Length);
                     }
                     break;
 
@@ -335,19 +356,19 @@ namespace SQL_ConsoleApp.Files
                     {
                         // Число -> строка
                         string numStr = trimmedValue.Trim();
-                        if (numStr.Length > newField.byteLenght)
-                            return numStr.Substring(0, newField.byteLenght);
+                        if (numStr.Length > newField.Length)
+                            return numStr.Substring(0, newField.Length);
                         else
-                            return numStr.PadRight(newField.byteLenght);
+                            return numStr.PadRight(newField.Length);
                     }
                     else if (oldField.Type == 'L')
                     {
                         // Логическое -> строка
                         string boolStr = trimmedValue == "T" ? "TRUE" : "FALSE";
-                        if (boolStr.Length > newField.byteLenght)
-                            return boolStr.Substring(0, newField.byteLenght);
+                        if (boolStr.Length > newField.Length)
+                            return boolStr.Substring(0, newField.Length);
                         else
-                            return boolStr.PadRight(newField.byteLenght);
+                            return boolStr.PadRight(newField.Length);
                     }
                     break;
 
@@ -384,7 +405,6 @@ namespace SQL_ConsoleApp.Files
             // Если преобразование не предусмотрено или не удалось - значение по умолчанию
             return GetDefaultValue(newField);
         }
-
         public int Update(UpdateCommand update)
         {
             int count = 0;
@@ -394,7 +414,7 @@ namespace SQL_ConsoleApp.Files
                 var record = _records[i];
                 if (record.IsDeleted) continue;
 
-                if (parser == null || parser.Evaluate(record.ToDictionary(_header.Fields)))
+                if (parser == null || parser.Evaluate(record.ToDictionary(_header.Fields), _dbtManager))
                 {
                     foreach (var set in update.GetValues())
                     {
@@ -411,7 +431,6 @@ namespace SQL_ConsoleApp.Files
             Save();
             return count;
         }
-
         public int Delete(DeleteCommand delete)
         {
             int count = 0;
@@ -420,8 +439,8 @@ namespace SQL_ConsoleApp.Files
             {
                 var record = _records[i];
                 if (record.IsDeleted) continue;
-
-                if (parser == null || parser.Evaluate(record.ToDictionary(_header.Fields)))
+                
+                if (parser == null || parser.Evaluate(record.ToDictionary(_header.Fields), _dbtManager))
                 {
                     record.IsDeleted = true;
                     count++;
@@ -431,7 +450,6 @@ namespace SQL_ConsoleApp.Files
             Save();
             return count;
         }
-
         public int Truncate()
         {
             int count = _records.RemoveAll(r => r.IsDeleted);
@@ -439,7 +457,6 @@ namespace SQL_ConsoleApp.Files
             Save();
             return count;
         }
-
         public int Restore(RestoreCommand restore)
         {
             int count = 0;
@@ -450,7 +467,7 @@ namespace SQL_ConsoleApp.Files
                 var record = _records[i];
                 if (!record.IsDeleted) continue;
 
-                if (parser == null || parser.Evaluate(record.ToDictionary(_header.Fields)))
+                if (parser == null || parser.Evaluate(record.ToDictionary(_header.Fields), _dbtManager))
                 {
                     record.IsDeleted = false;
                     count++;
@@ -460,45 +477,96 @@ namespace SQL_ConsoleApp.Files
             Save();
             return count;
         }
-
-        public string Select(SelectCommand select)
+        public List<object[]> Select(SelectCommand select)
         {
             var parser = select.GetWhereParser();
-            
-            var result = new StringBuilder();
 
             var selectedRecords = _records.Where(r => !r.IsDeleted);
 
             if (parser != null)
             {
-                selectedRecords = selectedRecords.Where(r => parser.Evaluate(r.ToDictionary(_header.Fields)));
+                selectedRecords = selectedRecords.Where(r => parser.Evaluate(r.ToDictionary(_header.Fields), _dbtManager));
             }
-            
 
-            var columns = select.IsSelectAll() ? _header.Fields.Select(f => f.Name.TrimEnd('\0')).ToList() : select.GetColumns();
+            var columns = select.IsSelectAll()
+                ? _header.Fields.Select(f => f.Name.TrimEnd('\0')).ToList()
+                : select.GetColumns();
 
-            // Заголовок
-            foreach (var col in columns)
-                result.Append($"{col,-15}");
-            result.AppendLine();
-            result.AppendLine(new string('-', columns.Count * 15));
+            // Получаем индексы и типы колонок
+            var columnInfos = columns.Select(col =>
+            {
+                int colIndex = _header.Fields.FindIndex(f =>
+                    f.Name.TrimEnd('\0').Equals(col, StringComparison.OrdinalIgnoreCase));
 
-            // Данные
+                if (colIndex == -1)
+                    throw new Exception($"Поле '{col}' не найдено");
+
+                return (Index: colIndex, Field: _header.Fields[colIndex]);
+            }).ToList();
+
+            var result = new List<object[]>();
+
             foreach (var record in selectedRecords)
             {
-                foreach (var col in columns)
-                {
-                    int colIndex = _header.Fields.FindIndex(f => f.Name.TrimEnd('\0').Equals(col, StringComparison.OrdinalIgnoreCase));
-                    if (colIndex == -1)
-                        throw new Exception($"Поле '{col}' не найдено");
+                object?[] row = new object[columns.Count];
 
-                    string value = record.GetDisplayValue(colIndex, _header.Fields[colIndex], _dbtManager);
-                    result.Append($"{value,-15}");
+                for (int i = 0; i < columnInfos.Count; i++)
+                {
+                    var (index, field) = columnInfos[i];
+                    string rawValue = record.GetValue(index);
+
+                    row[i] = field.Type switch
+                    {
+                        'C' => rawValue.TrimEnd() ?? null, // string
+                        'N' => ParseNumeric(rawValue, (int)field.DecimalCount) ?? null, // double
+                        'L' => ParseLogical(rawValue) ?? null, // bool
+                        'D' => ParseDate(rawValue) ?? null, // DateTime?
+                        'M' => _dbtManager?.GetText(rawValue) ?? null, // string from memo
+                        _ => rawValue.Trim() ?? null
+                    };
                 }
-                result.AppendLine();
+
+                result.Add(row);
             }
 
-            return result.ToString();
+            return result;
+        }
+        private double? ParseNumeric(string value, int decimalCount)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+            value = value.Replace('.', ',');
+            if (double.TryParse(value.Trim(), out double result))
+            {
+                // Форматируем с фиксированным количеством знаков после запятой
+                string formatted = result.ToString($"F{decimalCount}");
+                return double.Parse(formatted);
+            }
+            return null;
+        }
+        private bool? ParseLogical(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            string trimmed = value.Trim().ToUpperInvariant();
+            return trimmed == "T" || trimmed == "Y" || trimmed == "1" || trimmed == "TRUE";
+        }
+        private DateTime? ParseDate(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Trim().Length == 0)
+                return null;
+
+            string trimmed = value.Trim();
+            if (DateTime.TryParseExact(trimmed, "yyyyMMdd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out DateTime date))
+            {
+                return date;
+            }
+
+            return null;
         }
     }
 }

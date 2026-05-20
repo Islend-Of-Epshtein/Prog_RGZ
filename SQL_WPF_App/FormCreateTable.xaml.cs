@@ -278,17 +278,16 @@ namespace SQL_WPF_App
             Name = name;
             IsNotNull = isNotNull;
             Width = 0;
-            Precision = 0;
-
-            if (type == 'C' && !string.IsNullOrEmpty(width))
-                Width = int.Parse(width);
-            else if (type == 'N')
+            Precision = !string.IsNullOrEmpty(precision) ? Precision = int.Parse(precision) : 0;
+            Width = type switch
             {
-                if (!string.IsNullOrEmpty(width))
-                    Width = int.Parse(width);
-                if (!string.IsNullOrEmpty(precision))
-                    Precision = int.Parse(precision);
-            }
+                'C' => !string.IsNullOrEmpty(width) ? int.Parse(width) : 0,
+                'N' => !string.IsNullOrEmpty(width) ? int.Parse(width) : 0,
+                'L' => Width = 1,
+                'D' => Width = 8,
+                'M' => Width = 10,
+                _ => Width = 0
+            };
         }
     }
 }

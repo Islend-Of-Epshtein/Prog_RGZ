@@ -27,12 +27,10 @@ namespace SQL_WPF_App
             LoadData();
         }
 
-        // Получаем структуру таблицы с типами и NOT NULL
         private void LoadStructure()
         {
             try
             {
-                // Предполагаем, что в DatabaseModel есть метод GetTableStructure, возвращающий список с именами, типами, длинами, NOT NULL
                 var fields = _model.GetTableStructure();
                 _columns = fields.Select(f => new ColumnInfo
                 {
@@ -45,22 +43,8 @@ namespace SQL_WPF_App
             }
             catch (Exception ex)
             {
-                // Если метод отсутствует, пытаемся получить структуру через SELECT
                 MessageBox.Show($"Не удалось получить структуру таблицы: {ex.Message}. Будет использовано упрощённое отображение.",
                     "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
-                _columns = new List<ColumnInfo>();
-                // Пытаемся получить имена колонок через SELECT
-                try
-                {
-                    string result = _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()} WHERE 1=0;");
-                    var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (lines.Length > 0)
-                    {
-                        string[] headers = lines[0].Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        _columns = headers.Select(h => new ColumnInfo { Name = h, Type = 'C', Length = 255, IsNotNull = false }).ToList();
-                    }
-                }
-                catch { }
             }
         }
 
@@ -68,8 +52,9 @@ namespace SQL_WPF_App
         {
             try
             {
-                string result = _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()};");
-                _dataTable = ParseResultToDataTable(result, _model.GetTableStructure());
+                _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()};");
+                var data = _model.GetSelectResult();
+                _dataTable = CreateDataTableFromData(data, _model.GetTableStructure());
                 dgvData.ItemsSource = _dataTable.DefaultView;
                 dgvData.AutoGenerateColumns = true;
             }
@@ -77,6 +62,64 @@ namespace SQL_WPF_App
             {
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        public static DataTable CreateDataTableFromData(List<object[]> data, List<(string Name, char Type, int Length, int Precision, bool NotNull)> structure)
+        {
+            var dt = new DataTable();
+
+            if (structure == null || structure.Count == 0)
+                return dt;
+
+            // Добавляем колонки с правильными типами на основе структуры
+            for (int i = 0; i < structure.Count; i++)
+            {
+                var field = structure[i];
+                Type dataType = field.Type switch
+                {
+                    'N' => typeof(string),  // Меняем на string для контроля формата
+                    'L' => typeof(string),  // Меняем на string для отображения TRUE/FALSE
+                    'D' => typeof(string),  // Меняем на string для формата даты
+                    'M' => typeof(string),
+                    'C' => typeof(string),
+                    _ => typeof(string)
+                };
+
+                var dataColumn = new DataColumn(field.Name, dataType)
+                {
+                    AllowDBNull = !field.NotNull
+                };
+                dt.Columns.Add(dataColumn);
+            }
+
+            if (data == null)
+                return dt;
+
+            // Заполняем данными с форматированием
+            foreach (var row in data)
+            {
+                var dataRow = dt.NewRow();
+                for (int i = 0; i < Math.Min(row.Length, dt.Columns.Count); i++)
+                {
+                    if (row[i] == null || row[i] == DBNull.Value)
+                    {
+                        dataRow[i] = DBNull.Value;
+                    }
+                    else
+                    {
+                        dataRow[i] = structure[i].Type switch
+                        {
+                            'D' => row[i] is DateTime date ? date.ToString("dd.MM.yyyy") : row[i].ToString(),
+                            'L' => row[i] is bool boolVal ? (boolVal ? "TRUE" : "FALSE") : row[i].ToString(),
+                            'N' => row[i] is double numVal ? numVal.ToString() : row[i].ToString(),
+                            _ => row[i].ToString()
+                        };
+                    }
+                }
+                dt.Rows.Add(dataRow);
+            }
+
+            return dt;
         }
 
         // Добавление записи
@@ -92,7 +135,6 @@ namespace SQL_WPF_App
             if (dialog.ShowDialog() == true)
             {
                 var values = (Dictionary<string, object>)dialog.Tag;
-                // Валидация
                 string error = ValidateValues(values);
                 if (error != null)
                 {
@@ -101,7 +143,7 @@ namespace SQL_WPF_App
                 }
                 if (values.Keys.Count != values.Values.Count)
                 {
-                    MessageBox.Show(error, "Количество имен != количеству значений", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    MessageBox.Show("Количество имен != количеству значений", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
                 string columns = string.Join(", ", values.Keys);
@@ -138,7 +180,6 @@ namespace SQL_WPF_App
             {
                 oldValues[col.ColumnName] = rowView[col.ColumnName];
             }
-
             var dialog = CreateEditDialog(oldValues);
             if (dialog.ShowDialog() == true)
             {
@@ -150,13 +191,11 @@ namespace SQL_WPF_App
                     MessageBox.Show(error, "Ошибка валидации", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return;
                 }
-
                 string setClause = string.Join(", ", newValues.Select(kv => $"{kv.Key} = {FormatValue(kv.Value)}"));
                 string whereClause = BuildWhereClause(oldValues);
                 string command = $"UPDATE {_model.GetTableName()} SET {setClause} WHERE {whereClause};";
                 try
                 {
-
                     _model.ExecuteCommand(command);
                     MessageBox.Show("Запись обновлена", "Успех", MessageBoxButton.OK, MessageBoxImage.Information);
                     LoadData();
@@ -220,7 +259,7 @@ namespace SQL_WPF_App
         {
             var dialog = new Window
             {
-                Title = oldValues == null ? $"Добавление записи в {_model.GetTableName()}" 
+                Title = oldValues == null ? $"Добавление записи в {_model.GetTableName()}"
                                           : $"Редактирование записи в {_model.GetTableName()}",
                 SizeToContent = SizeToContent.WidthAndHeight,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -232,33 +271,61 @@ namespace SQL_WPF_App
 
             var stack = new StackPanel { Margin = new Thickness(5) };
             var fields = new Dictionary<string, TextBox>();
-            var requiredMarks = new Dictionary<string, TextBlock>();
 
             foreach (var col in _columns)
             {
                 var labelPanel = new StackPanel { Orientation = Orientation.Horizontal };
-                var label = new Label { Content = col.Name, Margin = new Thickness(0, 5, 0, 0), FontWeight = col.IsNotNull ? FontWeights.Bold : FontWeights.Normal };
+                var label = new Label
+                {
+                    Content = col.Name,
+                    Margin = new Thickness(0, 5, 0, 0),
+                    FontWeight = col.IsNotNull ? FontWeights.Bold : FontWeights.Normal
+                };
                 labelPanel.Children.Add(label);
                 if (col.IsNotNull)
                 {
-                    var star = new TextBlock { Text = "*", Foreground = System.Windows.Media.Brushes.Red, Margin = new Thickness(2, 5, 0, 0) };
+                    var star = new TextBlock
+                    {
+                        Text = "*",
+                        Foreground = System.Windows.Media.Brushes.Red,
+                        Margin = new Thickness(2, 5, 0, 0)
+                    };
                     labelPanel.Children.Add(star);
                 }
                 stack.Children.Add(labelPanel);
 
                 var tb = new TextBox { Width = 250, Margin = new Thickness(0, 0, 0, 5) };
                 if (oldValues != null && oldValues.ContainsKey(col.Name))
-                    tb.Text = oldValues[col.Name]?.ToString() ?? "";
+                {
+                    // Форматируем значение для отображения
+                    object value = oldValues[col.Name];
+                    if (value is DateTime date)
+                        tb.Text = date.ToString("dd.MM.yyyy");
+                    else if (value is bool boolVal)
+                        tb.Text = boolVal ? "TRUE" : "FALSE";
+                    else if (value is double numVal)
+                        tb.Text = numVal.ToString();
+                    else
+                        tb.Text = value?.ToString() ?? "";
+                }
                 stack.Children.Add(tb);
                 fields[col.Name] = tb;
             }
 
-
-
-            var buttonPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+            var buttonPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 10, 0, 0)
+            };
             var okBtn = new Button { Content = "OK", Width = 75, Margin = new Thickness(5) };
             var cancelBtn = new Button { Content = "Отмена", Width = 75, Margin = new Thickness(5) };
-            var info = new Label { Content = "* - NotNull поле", Margin = new Thickness(5, 2, 2, 2), Foreground = System.Windows.Media.Brushes.Red };
+            var info = new Label
+            {
+                Content = "* - NotNull поле",
+                Margin = new Thickness(5, 2, 2, 2),
+                Foreground = System.Windows.Media.Brushes.Red
+            };
             buttonPanel.Children.Add(okBtn);
             buttonPanel.Children.Add(cancelBtn);
             stack.Children.Add(info);
@@ -310,9 +377,7 @@ namespace SQL_WPF_App
                     case 'N':
                         string normalizedValue = strValue.Replace('.', ',');
                         if (!double.TryParse(normalizedValue, out double num))
-                        {
                             return $"Поле '{col.Name}' (N) должно быть числом.";
-                        }
                         break;
                     case 'D':
                         if (!DateTime.TryParse(strValue, out _))
@@ -324,39 +389,46 @@ namespace SQL_WPF_App
                                        upperVal == "FALSE" || upperVal == "F" ||
                                        upperVal == "Y" || upperVal == "N" ||
                                        upperVal == "?";
-
                         if (!isValid)
                             return $"Поле '{col.Name}' (L) должно быть TRUE/FALSE, T/F, Y/N или ?";
-                        break;
-                    case 'M':
-                        if (!strValue.Trim().StartsWith('@'))
-                            return $"Поле '{col.Name}' (M) должно начинаться с @";
                         break;
                 }
             }
             return null;
         }
 
-        // Форматирование значения для SQL
+        // Форматирование значения для запроса в модель
         private string FormatValue(object val)
         {
             if (val == null || string.IsNullOrEmpty(val.ToString()))
                 return "NULL";
+
             string str = val.ToString().Trim();
-            // Используем InvariantCulture, где разделитель - точка
+
+            // Число
             string num = str.Replace('.', ',');
-            if (double.TryParse(num,
-                out double _))
+            if (double.TryParse(num, out double _))
             {
                 num = num.Replace(',', '.');
                 return num;
             }
+
             string upperStr = str.ToUpperInvariant();
-            if (upperStr == "TRUE" || upperStr == "T" || upperStr == "Y" || upperStr == "NULL"
-                || upperStr == "FALSE" || upperStr == "F" || upperStr == "N" || upperStr == "?")
+
+            // Логическое
+            if (upperStr == "TRUE" || upperStr == "T" || upperStr == "Y" ||
+                upperStr == "FALSE" || upperStr == "F" || upperStr == "N" ||
+                upperStr == "?" || upperStr == "NULL")
                 return str;
+
+            // Дата
             if (DateTime.TryParse(str, out _))
                 return str;
+
+            // Проверяем путь к файлу
+            if (str.StartsWith('@'))
+                return str;
+
             // Строки экранируем
             str = str.Replace("\"", "");
             return $"\"{str}\"";
@@ -368,120 +440,25 @@ namespace SQL_WPF_App
             var conditions = new List<string>();
             foreach (var kv in values)
             {
-                if (kv.Value == null || string.IsNullOrEmpty(kv.Value.ToString()))
+                if (kv.Value == null || kv.Value == DBNull.Value || string.IsNullOrEmpty(kv.Value.ToString()))
                     conditions.Add($"{kv.Key} = NULL");
                 else
-                    conditions.Add($"{kv.Key} = {FormatValue(kv.Value)}");
+                {
+                    // Форматируем значение в зависимости от типа
+                    string formattedValue;
+                    if (kv.Value is DateTime date)
+                        formattedValue = date.ToString("dd.MM.yyyy");
+                    else if (kv.Value is bool boolVal)
+                        formattedValue = boolVal ? "TRUE" : "FALSE";
+                    else if (kv.Value is double numVal)
+                        formattedValue = numVal.ToString();
+                    else
+                        formattedValue = kv.Value.ToString();
+
+                    conditions.Add($"{kv.Key} = {FormatValue(formattedValue)}");
+                }
             }
             return string.Join(" AND ", conditions);
-        }
-
-        public static DataTable ParseResultToDataTable(string result, List<(string Name, char Type, int Length, int Precision, bool NotNull)> structure)
-        {
-            var dt = new DataTable();
-            if (string.IsNullOrWhiteSpace(result))
-                return dt;
-
-            // Разбиваем на строки
-            var lines = result.Trim().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length < 2)
-                return dt;
-
-            // Определяем количество колонок по первой строке (заголовки)
-            string headerLine = lines[0];
-            int columnWidth = 15;
-            int columnCount = headerLine.Length / columnWidth;
-            if (headerLine.Length % columnWidth != 0)
-                columnCount++;
-
-            // Извлекаем заголовки
-            var headers = new List<string>();
-            for (int i = 0; i < columnCount; i++)
-            {
-                int start = i * columnWidth;
-                if (start < headerLine.Length)
-                {
-                    string header = headerLine.Substring(start, Math.Min(columnWidth, headerLine.Length - start)).Trim();
-                    if (!string.IsNullOrEmpty(header))
-                        headers.Add(header);
-                }
-            }
-
-            // Добавляем колонки в DataTable
-            foreach (var header in headers)
-                dt.Columns.Add(header);
-
-            // Обрабатываем строки данных
-            for (int i = 2; i < lines.Length; i++)
-            {
-                string line = lines[i];
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                var values = new List<string>();
-
-                for (int col = 0; col < headers.Count; col++)
-                {
-                    int start = col * columnWidth;
-                    if (start < line.Length)
-                    {
-                        string val = line.Substring(start, Math.Min(columnWidth, line.Length - start)).Trim();
-
-                        // Форматируем значение по типу поля
-                        if (col < structure.Count)
-                        {
-                            val = FormatValueByType(val, structure[col].Type);
-                        }
-
-                        values.Add(string.IsNullOrEmpty(val) ? "" : val);
-                    }
-                    else
-                    {
-                        values.Add("");
-                    }
-                }
-
-                while (values.Count < headers.Count)
-                    values.Add("");
-
-                dt.Rows.Add(values.ToArray());
-            }
-
-            return dt;
-        }
-
-        private static string FormatValueByType(string value, char type)
-        {
-            if (string.IsNullOrEmpty(value))
-                return value;
-
-            switch (type)
-            {
-                case 'D': // Дата — добавляем разделители
-                    if (value.Length == 8 && System.Text.RegularExpressions.Regex.IsMatch(value, @"^\d{8}$"))
-                        return $"{value.Substring(0, 4)}.{value.Substring(4, 2)}.{value.Substring(6, 2)}";
-                    return value;
-
-                case 'N': // Число — нормализуем разделитель
-                    string normalized = value.Replace(',', '.');
-                    if (double.TryParse(normalized,
-                        System.Globalization.NumberStyles.Any,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        out double num))
-                    {
-                        return num.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    }
-                    return value;
-
-                case 'L': // Логический
-                    if (value == "T") return "TRUE";
-                    if (value == "F") return "FALSE";
-                    if (value == "?") return "NULL";
-                    return value;
-
-                default: // C, M и другие
-                    return value;
-            }
         }
 
         private class ColumnInfo

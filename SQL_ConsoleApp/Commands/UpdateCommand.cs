@@ -13,7 +13,8 @@ namespace SQL_ConsoleApp.Commands
 
         private static readonly Regex SET_PATTERN = new Regex(
             @"^\s*(?<field>\w+)\s*=\s*(?<value>" +
-            @"\d+(?:\.\d+)?|TRUE|FALSE|T|F|N|Y|\?|NULL|""[^""]*""|\d\d(\.|,|\\|/)\d\d\1\d\d\d\d|\d\d\d\d(\.|,|\\|/)\d\d\1\d\d)\s*$",
+            @"\d+(?:\.\d+)?|TRUE|FALSE|T|F|N|Y|\?|NULL|""[^""]*""|@[^\s]+|"+
+            @"\d\d(\.|,|\\|/)\d\d\1\d\d\d\d|\d\d\d\d(\.|,|\\|/)\d\d(\.|,|\\|/)\d\d)\s*$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
         private readonly Match _regex;

@@ -9,7 +9,7 @@ namespace SQL_ConsoleApp.Model
     {
         private TableManager _currentTable;
         private string _currentTableName;
-
+        private List<object[]> _selectResult;
         public DatabaseModel()
         {
             _currentTable = null;
@@ -106,8 +106,8 @@ namespace SQL_ConsoleApp.Model
             // SELECT
             if (command.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
             {
-                var select = new SelectCommand(command);
-                return _currentTable.Select(select);
+                SelectCommand(command);
+                return null;
             }
 
             // UPDATE
@@ -143,6 +143,16 @@ namespace SQL_ConsoleApp.Model
             }
 
             throw new Exception("Неизвестная команда");
+        }
+        //Вынесена отдельно, т.к представление результатов в виде строки непрактично
+        private void SelectCommand(string command)
+        {
+            var select = new SelectCommand(command);
+            _selectResult = _currentTable.Select(select);
+        }
+        public List<object[]> GetSelectResult()
+        {
+            return _selectResult;
         }
         public void RenameTable(string oldName, string newName)
         {

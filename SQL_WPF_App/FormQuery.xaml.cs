@@ -32,19 +32,20 @@ namespace SQL_WPF_App
 
             try
             {
-                string result = _model.ExecuteCommand(sql);
-
-                if (sql.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+                List<object[]> data;
+                string result = _model.ExecuteCommand(sql); // Маркер SELECT - команды : возврат null 
+                if (result != null)
                 {
-                    var dt = FormDataView.ParseResultToDataTable(result, _model.GetTableStructure());
-                    dgvOutput.ItemsSource = dt.DefaultView;
+                    MessageBox.Show(result, "Результат", MessageBoxButton.OK, MessageBoxImage.Information);
+                    _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()};");
+                    data = _model.GetSelectResult();
                 }
                 else
                 {
-                    MessageBox.Show(result, "Результат", MessageBoxButton.OK, MessageBoxImage.Information);
-                    dgvOutput.ItemsSource = null;
+                    data = _model.GetSelectResult();
                 }
-
+                var dt = FormDataView.CreateDataTableFromData(data, _model.GetTableStructure());
+                dgvOutput.ItemsSource = dt.DefaultView;
                 QueryExecuted?.Invoke();
             }
             catch (Exception ex)

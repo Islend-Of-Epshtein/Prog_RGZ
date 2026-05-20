@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SQL_ConsoleApp.Files;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -252,12 +253,13 @@ namespace SQL_ConsoleApp.Commands
             };
         }
 
-        public bool Evaluate(Dictionary<string, (object, char)> row)
+        public bool Evaluate(Dictionary<string, (object, char)> row, DbtManager dbtManager = null)
         {
-            return EvaluateNode(Root, row);
+            
+            return EvaluateNode(Root, row, dbtManager);
         }
 
-        private bool EvaluateNode(LogicalExpressionNode node, Dictionary<string, (object, char)> row)
+        private bool EvaluateNode(LogicalExpressionNode node, Dictionary<string, (object Value, char Type)> row, DbtManager dbtManager)
         {
             if (node.IsElementary)
             {
@@ -265,26 +267,24 @@ namespace SQL_ConsoleApp.Commands
                 if (!row.ContainsKey(expr.RowName))
                     throw new Exception($"Поле '{expr.RowName}' не найдено");
 
-                object fieldValue = row[expr.RowName].Item1;
+                var (fieldValue, fieldType) = row[expr.RowName];
 
-                object compareValue = ParseValue(expr.Value, row[expr.RowName].Item2);
-
-                return expr.CompareOperator switch
+                // Если поле мемо, получаем текст из файла
+                if (fieldType == 'M' && dbtManager != null)
                 {
-                    CompareOperator.Equal => fieldValue.Equals(compareValue),
-                    CompareOperator.NotEqual => !fieldValue.Equals(compareValue),
-                    CompareOperator.LessThan => Comparer<object>.Default.Compare(fieldValue, compareValue) < 0,
-                    CompareOperator.GreaterThan => Comparer<object>.Default.Compare(fieldValue, compareValue) > 0,
-                    CompareOperator.LessOrEqual => Comparer<object>.Default.Compare(fieldValue, compareValue) <= 0,
-                    CompareOperator.GreaterOrEqual => Comparer<object>.Default.Compare(fieldValue, compareValue) >= 0,
-                    _ => false
-                };
+                    fieldValue = dbtManager.GetText(fieldValue?.ToString() ?? "");
+                }
+
+                object compareValue = ParseValue(expr.Value, fieldType);
+
+                // Сравниваем значения с учетом типа
+                return CompareTypedValues(fieldValue, compareValue, fieldType, expr.CompareOperator);
             }
 
-            bool leftVal = EvaluateNode(node.Left, row);
+            bool leftVal = EvaluateNode(node.Left, row, dbtManager);
             if (node.IsNot) return !leftVal;
 
-            bool rightVal = EvaluateNode(node.Right, row);
+            bool rightVal = EvaluateNode(node.Right, row, dbtManager);
             return node.Operator switch
             {
                 LogicalOperator.And => leftVal && rightVal,
@@ -294,32 +294,111 @@ namespace SQL_ConsoleApp.Commands
             };
         }
 
+        private bool CompareTypedValues(object fieldValue, object compareValue, char type, CompareOperator compareOperator)
+        {
+            switch (type)
+            {
+                case 'N': // Числа
+
+                    double num1 = fieldValue is double d1 ? d1 :
+                                 (double.TryParse(fieldValue?.ToString()?.Replace('.',',').Trim(), out double parsed1) ? parsed1 : 0.0);
+                    double num2 = compareValue is double d2 ? d2 :
+                                 (double.TryParse(compareValue?.ToString()?.Replace('.', ',').Trim(), out double parsed2) ? parsed2 : 0.0);
+
+                    return compareOperator switch
+                    {
+                        CompareOperator.Equal => num1 == num2,
+                        CompareOperator.NotEqual => num1 != num2,
+                        CompareOperator.LessThan => num1 < num2,
+                        CompareOperator.GreaterThan => num1 > num2,
+                        CompareOperator.LessOrEqual => num1 <= num2,
+                        CompareOperator.GreaterOrEqual => num1 >= num2,
+                        _ => false
+                    };
+
+                case 'L': // Логические
+                    bool bool1 = fieldValue is bool b1 ? b1 :
+                                (fieldValue?.ToString()?.Trim().ToUpperInvariant() == "T" ||
+                                 fieldValue?.ToString()?.Trim().ToUpperInvariant() == "TRUE");
+                    bool bool2 = compareValue is bool b2 ? b2 :
+                                (compareValue?.ToString()?.Trim().ToUpperInvariant() == "T" ||
+                                 compareValue?.ToString()?.Trim().ToUpperInvariant() == "TRUE");
+
+                    return compareOperator switch
+                    {
+                        CompareOperator.Equal => bool1 == bool2,
+                        CompareOperator.NotEqual => bool1 != bool2,
+                        CompareOperator.LessThan => !bool1 && bool2,     // false < true
+                        CompareOperator.GreaterThan => bool1 && !bool2,  // true > false
+                        CompareOperator.LessOrEqual => !bool1 || bool2,  // false <= true
+                        CompareOperator.GreaterOrEqual => bool1 || !bool2, // true >= false
+                        _ => false
+                    };
+
+                case 'D': // Даты
+                    DateTime? date1 = fieldValue is DateTime dt1 ? dt1 :
+                                    (DateTime.TryParseExact(fieldValue?.ToString()?.Trim(), "yyyyMMdd",
+                                     System.Globalization.CultureInfo.InvariantCulture,
+                                     System.Globalization.DateTimeStyles.None, out DateTime parsedDt1) ? parsedDt1 : (DateTime?)null);
+                    DateTime? date2 = compareValue is DateTime dt2 ? dt2 :
+                                    (DateTime.TryParseExact(compareValue?.ToString()?.Trim(), "yyyyMMdd",
+                                     System.Globalization.CultureInfo.InvariantCulture,
+                                     System.Globalization.DateTimeStyles.None, out DateTime parsedDt2) ? parsedDt2 : (DateTime?)null);
+
+                    return compareOperator switch
+                    {
+                        CompareOperator.Equal => date1 == date2,
+                        CompareOperator.NotEqual => date1 != date2,
+                        CompareOperator.LessThan => date1 < date2,
+                        CompareOperator.GreaterThan => date1 > date2,
+                        CompareOperator.LessOrEqual => date1 <= date2,
+                        CompareOperator.GreaterOrEqual => date1 >= date2,
+                        _ => false
+                    };
+
+                case 'C': // Строки
+                case 'M': // Memo как строки
+                default:  // Строковое сравнение по умолчанию
+                    string str1 = fieldValue?.ToString()?.Trim() ?? "";
+                    string str2 = compareValue?.ToString()?.Trim() ?? "";
+
+                    return compareOperator switch
+                    {
+                        CompareOperator.Equal => string.Equals(str1, str2, StringComparison.OrdinalIgnoreCase),
+                        CompareOperator.NotEqual => !string.Equals(str1, str2, StringComparison.OrdinalIgnoreCase),
+                        CompareOperator.LessThan => string.Compare(str1, str2, StringComparison.OrdinalIgnoreCase) < 0,
+                        CompareOperator.GreaterThan => string.Compare(str1, str2, StringComparison.OrdinalIgnoreCase) > 0,
+                        CompareOperator.LessOrEqual => string.Compare(str1, str2, StringComparison.OrdinalIgnoreCase) <= 0,
+                        CompareOperator.GreaterOrEqual => string.Compare(str1, str2, StringComparison.OrdinalIgnoreCase) >= 0,
+                        _ => false
+                    };
+            }
+        }
+
         private object ParseValue(string value, char type)
         {
-            
             string upperValue = value.ToUpperInvariant();
 
-            if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y" )
-                return "T";
-            if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N")
-                return "F";
-            if (upperValue == "NULL")
-                if(type == 'L')
-                    return "?";
-                    else
-                    return "";
-            
-            // Потом строки в кавычках
+            // Логические значения
+            if (type == 'L')
+            {
+                if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y" )
+                    return true;
+                if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N")
+                    return false;
+                if (upperValue == "NULL" || upperValue == "?")
+                    return false;
+            }
+            if (upperValue.Equals("NULL"))
+                return "";
+            if (type == 'D' && DateTime.TryParse(value, out DateTime dateRes))
+                return dateRes.ToString("yyyyMMdd");
+
+            if (type == 'N' && double.TryParse(value.Replace('.', ','), out double numRes))
+                return numRes;
+
             if (value.StartsWith("\""))
-                return value.Trim('"');
-
-            // Числа
-            if (double.TryParse(value, out double dbl))
-                return value;
-
-            // Даты
-            if (DateTime.TryParse(value, out DateTime res))
-                return res.ToString("yyyyMMdd");
+                return DbfRecord.ClearQuotes(value);
 
             return value;
         }

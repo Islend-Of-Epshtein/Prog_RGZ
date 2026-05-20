@@ -323,10 +323,6 @@ namespace SQL_WPF_App
 
         private void QueryItem_Click(object sender, RoutedEventArgs e)
         {
-            if (!_model.isTableOpened()) {
-                MessageBox.Show("Сначала откройте таблицу", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
             var form = new FormQuery(_model);
             form.QueryExecuted += RefreshData;
             form.ShowDialog();
@@ -350,8 +346,10 @@ namespace SQL_WPF_App
             try
             {
                 string command = $"SELECT * FROM {_model.GetTableName()};";
-                string result = _model.ExecuteCommand(command);
-                var dt = FormDataView.ParseResultToDataTable(result, _model.GetTableStructure());
+                _model.ExecuteCommand(command);
+
+                var data = _model.GetSelectResult();
+                var dt = FormDataView.CreateDataTableFromData(data, _model.GetTableStructure());
                 dgvResult.ItemsSource = dt.DefaultView;
             }
             catch (Exception ex)

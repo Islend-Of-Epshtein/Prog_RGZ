@@ -78,89 +78,85 @@ namespace SQL_ConsoleApp.Files
         {
             value = value.Trim();
 
-            if (field.Type == 'M')
+            switch (field.Type)
             {
-                if (dbtManager == null)
-                    throw new Exception("MEMO поле не поддерживается");
+                case 'M':
+                    if (dbtManager == null)
+                        throw new Exception("MEMO поле не поддерживается");
 
-                if (string.IsNullOrEmpty(value))
-                    return dbtManager.AddText("");
+                    if (string.IsNullOrEmpty(value))
+                        return new string(' ', 10);
 
-                if (value.StartsWith("@"))
-                {
-                    string filePath = value.Substring(1);
-                    if (File.Exists(filePath))
-                        value = File.ReadAllText(filePath, Encoding.UTF8);
-                    else
-                        throw new Exception($"Файл {filePath} не найден");
-                }
-
-                return dbtManager.AddText(value);
-            }
-
-            if (field.Type == 'C')
-            {
-                if (value.StartsWith("\""))
-                {
-                    int firstIndex = value.IndexOf('"'),
-                        lastIndex = value.LastIndexOf('"');
-
-                    if (firstIndex >= 0)
+                    if (value.StartsWith("@"))
                     {
-                        value = value.Remove(firstIndex, 1);
-                        // После удаления первого символа, lastIndex смещается на -1
-                        if (lastIndex >= 0)
+                        string filePath = value.Substring(1);
+                        if (File.Exists(filePath))
+                            value = File.ReadAllText(filePath, Encoding.UTF8);
+                        else
+                            throw new Exception($"Файл {filePath} не найден");
+                    }
+                    value = ClearQuotes(value);
+                    return dbtManager.AddText(value);
+
+                case 'C':
+                    value = ClearQuotes(value);
+                    return value.PadRight(field.Length).Substring(0, field.Length);
+
+                case 'N':
+                    value = value.Replace('.', ',');
+                    if (double.TryParse(value, out double num))
+                    {
+                        // Используем InvariantCulture для точки в качестве разделителя
+                        string formatted = num.ToString($"F{field.DecimalCount}", System.Globalization.CultureInfo.InvariantCulture);
+
+                        if (formatted.Length > field.Length)
                         {
-                            lastIndex--; // корректируем индекс
-                            value = value.Remove(lastIndex, 1);
+                            formatted = formatted.Substring(0, field.Length);
                         }
+                        else
+                        {
+                            formatted = formatted.PadLeft(field.Length);
+                        }
+                        return formatted;
                     }
-                }
-                return value.PadRight(field.Length).Substring(0, field.Length);
+                    return new string(' ', field.Length);
+
+                case 'D':
+                    if (DateTime.TryParse(value, out DateTime date))
+                        return date.ToString("yyyyMMdd");
+                    return new string(' ', 8); ;
+
+                case 'L':
+                    string upperValue = value.ToUpperInvariant();
+
+                    if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y")
+                        return "T";
+
+                    if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N")
+                        return "F";
+
+                    return "?"; // NULL значение
+
+                default:
+                    if (value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return "";
+                    }
+                    return value;
             }
-            if (field.Type == 'N')
+        }
+        public static string ClearQuotes(string value)
+        {
+            if (value.StartsWith("\"") && value.EndsWith("\""))
             {
-                value=value.Replace('.', ',');
-                if (double.TryParse(value, out double num))
+                int firstIndex = value.IndexOf('"');
+                int lastIndex = value.LastIndexOf('"');
+
+                if (firstIndex == 0 && lastIndex == value.Length - 1)
                 {
-                    // Используем InvariantCulture для точки в качестве разделителя
-                    string formatted = num.ToString($"F{field.DecimalCount}", System.Globalization.CultureInfo.InvariantCulture);
-                    
-                    if (formatted.Length > field.byteLenght)
-                    {
-                        formatted = formatted.Substring(0, field.byteLenght);
-                    }
-                    else
-                    {
-                        formatted = formatted.PadLeft(field.byteLenght);
-                    }
-                    return formatted;
+                    value = value.Remove(lastIndex, 1);
+                    value = value.Remove(firstIndex, 1);
                 }
-                return new string(' ', field.byteLenght);
-            }
-
-            if (field.Type == 'D')
-            {
-                if (DateTime.TryParse(value, out DateTime date))
-                    return date.ToString("yyyyMMdd");
-                return "        ";
-            }
-
-            if (field.Type == 'L')
-            {
-                string upperValue = value.ToUpperInvariant();
-
-                if (upperValue == "TRUE" || upperValue == "T" || upperValue == "Y")
-                    return "T";
-
-                if (upperValue == "FALSE" || upperValue == "F" || upperValue == "N")
-                    return "F";
-
-                return "?"; // NULL значение
-            }
-            if (value.Equals("NULL", StringComparison.OrdinalIgnoreCase))
-            {
-                return "";
             }
             return value;
         }
@@ -177,7 +173,7 @@ namespace SQL_ConsoleApp.Files
 
                 foreach (var field in header.Fields)
                 {
-                    byte[] fieldData = reader.ReadBytes(field.byteLenght);
+                    byte[] fieldData = reader.ReadBytes(field.Length);
                     string value = Encoding.ASCII.GetString(fieldData);
                     record._values.Add(value);
                 }
@@ -206,7 +202,7 @@ namespace SQL_ConsoleApp.Files
             var dict = new Dictionary<string, (object, char)>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < fields.Count; i++)
             {
-                dict[fields[i].Name.TrimEnd('\0')] = (_values[i].Trim(), fields[i].Type);
+                dict[fields[i].Name.TrimEnd('\0')] = (_values[i].Trim(), fields[i].Type);   
             }
             return dict;
         }

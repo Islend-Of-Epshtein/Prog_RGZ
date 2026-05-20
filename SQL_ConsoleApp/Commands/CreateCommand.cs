@@ -32,6 +32,15 @@ namespace SQL_ConsoleApp.Commands
                     Width = int.Parse(width);
                     Precision = int.Parse(precision);
                     break;
+                case 'D':
+                    Width = 8;
+                    break;
+                case 'L':
+                    Width = 1;
+                    break;
+                case 'M':
+                    Width = 10;
+                    break;
             }
         }
     }
