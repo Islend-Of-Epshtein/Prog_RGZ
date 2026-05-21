@@ -16,8 +16,9 @@ namespace SQL_ConsoleApp.CLI
 
         public static void Run()
         {
+            Console.BufferWidth = Math.Max(Console.BufferWidth, 500);
             Console.WriteLine("SQL Interpreter");
-            Console.WriteLine("Type '/?' для вывода списка команд, 'EXIT;' для выхода\nвсе команды заканчиваются (;), кроме /?");
+            Console.WriteLine("Type '/?' для вывода списка команд, 'EXIT;' для выхода\nвсе команды заканчиваются (;), кроме \"/?\" - помощь");
             Console.WriteLine();
 
             while (true)
@@ -71,9 +72,17 @@ namespace SQL_ConsoleApp.CLI
                             continue;
                         }
                     }
-
                     string result = _model.ExecuteCommand(fullCommand);
-                    if (!string.IsNullOrEmpty(result))
+                    // Проверяем, является ли команда SELECT
+                    if (result == null)
+                    {
+                        var data = _model.GetSelectResult();
+                        var structure = _model.GetTableStructure();
+                        string output = FormatSelectResult(data, structure);
+                        Console.WriteLine(output);
+                        _outputHistory.AppendLine(output);
+                    }
+                    else
                     {
                         Console.WriteLine(result);
                         _outputHistory.AppendLine(result);
@@ -88,15 +97,95 @@ namespace SQL_ConsoleApp.CLI
             }
         }
 
+        private static string FormatSelectResult(List<object[]> data, List<(string Name, char Type, int Length, int Precision, bool NotNull)> structure)
+        {
+            if (structure == null || structure.Count == 0)
+                return "Нет столбцов для отображения.";
+
+            var sb = new StringBuilder();
+
+            // Определяем ширину колонок
+            int[] columnWidths = new int[structure.Count];
+
+            // Заголовки
+            for (int i = 0; i < structure.Count; i++)
+            {
+                columnWidths[i] = structure[i].Name.Length;
+            }
+            if (data != null)
+            {
+                // Данные
+                foreach (var row in data)
+                {
+                    for (int i = 0; i < Math.Min(row.Length, structure.Count); i++)
+                    {
+                        string formattedValue = FormatValueForDisplay(row[i], structure[i]);
+                        columnWidths[i] = Math.Max(columnWidths[i], formattedValue.Length);
+                    }
+                }
+            }
+            // Минимальная ширина колонки
+            for (int i = 0; i < columnWidths.Length; i++)
+            {
+                columnWidths[i] = Math.Max(columnWidths[i], 10);
+            }
+
+            // Выводим заголовки
+            for (int i = 0; i < structure.Count; i++)
+            {
+                sb.Append(structure[i].Name.PadRight(columnWidths[i] + 2));
+            }
+            sb.AppendLine();
+
+            // Разделитель
+            for (int i = 0; i < structure.Count; i++)
+            {
+                sb.Append(new string('-', columnWidths[i]) + "  ");
+            }
+            sb.AppendLine();
+            if(data!=null)
+            {
+            // Данные
+                foreach (var row in data)
+                {
+                    for (int i = 0; i < Math.Min(row.Length, structure.Count); i++)
+                    {
+                        string formattedValue = FormatValueForDisplay(row[i], structure[i]);
+                        sb.Append(formattedValue.PadRight(columnWidths[i] + 2));
+                    }
+                    sb.AppendLine();
+                }
+
+                sb.AppendLine($"\nВсего записей: {data.Count}");
+            }
+            return sb.ToString();
+        }
+
+        private static string FormatValueForDisplay(object value, (string Name, char Type, int Length, int Precision, bool NotNull) field)
+        {
+            if (value == null)
+                return "NULL";
+
+            return field.Type switch
+            {
+                'D' => value is DateTime date ? date.ToString("dd.MM.yyyy") : value.ToString(),
+                'L' => value is bool boolVal ? (boolVal ? "TRUE" : "FALSE") : value.ToString(),
+                'N' => value is double numVal ? numVal.ToString($"F{field.Precision}") : value.ToString(),
+                'M' => value?.ToString() ?? "",
+                'C' => value?.ToString() ?? "",
+                _ => value?.ToString() ?? ""
+            };
+        }
+
         private static bool NeedConfirmation(string command)
         {
             string upperCommand = command.ToUpperInvariant();
 
             // Команды, требующие подтверждения
-            return upperCommand.Contains("ALTER TABLE") ||
-                   upperCommand.Contains("DROP TABLE") ||
+            return upperCommand.Contains(@"ALTER\s+TABLE") ||
+                   upperCommand.Contains(@"DROP\s+TABLE") ||
                    upperCommand.Contains("TRUNCATE") ||
-                   (upperCommand.Contains("DELETE FROM") && !upperCommand.Contains("WHERE"));
+                   (upperCommand.Contains(@"DELETE\s+FROM") && !upperCommand.Contains("WHERE"));
         }
 
         private static void HandleHelp(string command)

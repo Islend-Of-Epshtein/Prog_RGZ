@@ -57,7 +57,7 @@ namespace SQL_ConsoleApp.Files
             }
 
             if (HasMemoField())
-                _dbtManager = DbtManager.Open(Path.GetFileNameWithoutExtension(_filePath));
+                _dbtManager = DbtManager.Open(Path.ChangeExtension(_filePath, null));
         }
         public void Save()
         {
