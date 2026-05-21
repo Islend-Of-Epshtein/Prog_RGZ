@@ -1,29 +1,41 @@
 ﻿using SQL_ConsoleApp.Model;
 using System;
-using System.Data;
+using System.Collections.Generic;
 using System.Windows;
-
 
 namespace SQL_WPF_App
 {
+    /// <summary>
+    /// Окно выполнения произвольных SQL-запросов.
+    /// Поддерживает SELECT (с отображением результата в таблице) и прочие команды.
+    /// </summary>
     public partial class FormQuery : Window
     {
-        private DatabaseModel _model;
+        private readonly DatabaseModel _model;
 
+        /// <summary>Событие уведомления о выполнении запроса (для обновления родительского окна).</summary>
         public event Action QueryExecuted;
 
+        /// <summary>
+        /// Инициализирует окно запросов.
+        /// </summary>
+        /// <param name="model">Модель базы данных с открытой таблицей.</param>
         public FormQuery(DatabaseModel model)
         {
             InitializeComponent();
             _model = model;
         }
 
+        /// <summary>
+        /// Обработчик кнопки выполнения SQL-запроса.
+        /// Выполняет команду и отображает результат в DataGrid или в MessageBox.
+        /// </summary>
         private void BtnExecute_Click(object sender, RoutedEventArgs e)
         {
             string sql = txtInput.Text.Trim();
             if (string.IsNullOrEmpty(sql))
             {
-                MessageBox.Show("Введите SQL-запрос", "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
+                ShowWarning("Введите SQL-запрос");
                 return;
             }
 
@@ -32,36 +44,40 @@ namespace SQL_WPF_App
 
             try
             {
-                List<object[]> data;
-                string result = _model.ExecuteCommand(sql); // Маркер SELECT - команды : возврат null 
-                if (result != null)
+                string message = _model.ExecuteCommand(sql);
+
+                // ExecuteCommand возвращает не-null для не-SELECT команд (статус выполнения)
+                if (message != null)
                 {
-                    MessageBox.Show(result, "Результат", MessageBoxButton.OK, MessageBoxImage.Information);
+                    ShowInfo(message);
+                    // После изменения данных обновляем выборку для отображения актуального состояния
                     _model.ExecuteCommand($"SELECT * FROM {_model.GetTableName()};");
-                    data = _model.GetSelectResult();
                 }
-                else
-                {
-                    data = _model.GetSelectResult();
-                }
+
+                List<object[]> data = _model.GetSelectResult();
                 var dt = FormDataView.CreateDataTableFromData(data, _model.GetTableStructure());
                 dgvOutput.ItemsSource = dt.DefaultView;
                 QueryExecuted?.Invoke();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка выполнения запроса:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                ShowError($"Ошибка выполнения запроса:\n{ex.Message}");
             }
         }
 
-        private void BtnClear_Click(object sender, RoutedEventArgs e)
-        {
-            txtInput.Clear();
-        }
+        /// <summary>Очищает поле ввода SQL-запроса.</summary>
+        private void BtnClear_Click(object sender, RoutedEventArgs e) => txtInput.Clear();
 
-        private void BtnClose_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
-        }
+        /// <summary>Закрывает окно.</summary>
+        private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
+
+        private static void ShowInfo(string message) =>
+            MessageBox.Show(message, "Результат", MessageBoxButton.OK, MessageBoxImage.Information);
+
+        private static void ShowWarning(string message) =>
+            MessageBox.Show(message, "Предупреждение", MessageBoxButton.OK, MessageBoxImage.Warning);
+
+        private static void ShowError(string message) =>
+            MessageBox.Show(message, "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 }

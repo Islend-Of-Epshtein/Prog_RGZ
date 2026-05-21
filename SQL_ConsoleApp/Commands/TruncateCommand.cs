@@ -2,22 +2,30 @@
 
 namespace SQL_ConsoleApp.Commands
 {
+    /// <summary>
+    /// Команда TRUNCATE — физическое удаление всех помеченных записей.
+    /// Синтаксис: TRUNCATE &lt;имя_таблицы&gt;;
+    /// </summary>
     public class TruncateCommand : ICommand
     {
-        private static readonly Regex TRUNCATE_TABLE = new Regex(
-            @"(?im)^\s*TRUNCATE\s+(?<tableName>\w+)\s*;$",
-            RegexOptions.Compiled
-        );
+        private const string Pattern = @"(?im)^\s*TRUNCATE\s+(?<tableName>\w+)\s*;$";
 
-        private readonly Match _regex;
+        private static readonly Regex TruncateRegex = new(Pattern, RegexOptions.Compiled);
 
+        private readonly Match _match;
+
+        /// <summary>
+        /// Разбирает команду TRUNCATE. Выбрасывает исключение при неверном синтаксисе.
+        /// </summary>
+        /// <param name="command">Строка SQL-команды.</param>
         public TruncateCommand(string command)
         {
-            _regex = TRUNCATE_TABLE.Match(command);
-            if (!_regex.Success)
-                throw new Exception("Неверный синтаксис команды TRUNCATE");
+            _match = TruncateRegex.Match(command);
+            if (!_match.Success)
+                throw new System.Exception("Неверный синтаксис команды TRUNCATE");
         }
 
-        public string GetTableName() => _regex.Groups["tableName"].Value;
+        /// <summary>Возвращает имя таблицы.</summary>
+        public string GetTableName() => _match.Groups["tableName"].Value;
     }
 }

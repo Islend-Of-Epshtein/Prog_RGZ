@@ -2,22 +2,30 @@
 
 namespace SQL_ConsoleApp.Commands
 {
+    /// <summary>
+    /// Команда EXIT — завершение работы интерпретатора.
+    /// Синтаксис: EXIT;
+    /// </summary>
     public class ExitCommand : ICommand
     {
-        private static readonly Regex EXIT_COMMAND = new Regex(
-            @"(?im)^\s*EXIT\s*;$",
-            RegexOptions.Compiled
-        );
+        private const string Pattern = @"(?im)^\s*EXIT\s*;$";
 
-        private readonly Match _regex;
+        private static readonly Regex ExitRegex = new(Pattern, RegexOptions.Compiled);
 
+        private readonly Match _match;
+
+        /// <summary>
+        /// Разбирает команду EXIT. Выбрасывает исключение при неверном синтаксисе.
+        /// </summary>
+        /// <param name="command">Строка SQL-команды.</param>
         public ExitCommand(string command)
         {
-            _regex = EXIT_COMMAND.Match(command);
-            if (!_regex.Success)
-                throw new Exception("Неверный синтаксис команды EXIT");
+            _match = ExitRegex.Match(command);
+            if (!_match.Success)
+                throw new System.Exception("Неверный синтаксис команды EXIT");
         }
 
+        /// <summary>Возвращает пустую строку (команда не привязана к таблице).</summary>
         public string GetTableName() => "";
     }
 }

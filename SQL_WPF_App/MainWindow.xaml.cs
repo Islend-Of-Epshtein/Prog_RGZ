@@ -110,7 +110,7 @@ namespace SQL_WPF_App
 
                         var oldDict = fields.ToDictionary(f => f.Name);
                         var newDict = newRows.ToDictionary(r => r.Name);
-                        var renamedColumns = FindRenamedColumns(fields, newRows, newDict);
+                        var renamedColumns = FindRenamedColumns(oldDict, newRows, newDict);
 
                         RenameColumns(renamedColumns);
                         AddNewColumns(newRows, oldDict, renamedColumns);
@@ -139,23 +139,23 @@ namespace SQL_WPF_App
         /// Находит столбцы, которые были переименованы (совпадают тип и размеры, но разные имена).
         /// </summary>
         private static List<(string OldName, string NewName)> FindRenamedColumns(
-            List<(string Name, char Type, int Length, int Precision, bool NotNull)> oldFields,
+            Dictionary<string, (string Name, char Type, int Length, int Precision, bool NotNull)> oldFields,
             RowDefinition[] newRows,
             Dictionary<string, RowDefinition> newDict)
         {
             var result = new List<(string, string)>();
             foreach (var newRow in newRows)
             {
-                if (newDict.ContainsKey(newRow.Name)) continue;
+                if (oldFields.ContainsKey(newRow.Name)) continue;
 
                 var match = oldFields.FirstOrDefault(f =>
-                    !newDict.ContainsKey(f.Name) &&
-                    f.Type == newRow.Type &&
-                    f.Length == newRow.Width &&
-                    f.Precision == newRow.Precision);
+                    !newDict.ContainsKey(f.Value.Name) &&
+                    f.Value.Type == newRow.Type &&
+                    f.Value.Length == newRow.Width &&
+                    f.Value.Precision == newRow.Precision);
 
-                if (match.Name != null)
-                    result.Add((match.Name, newRow.Name));
+                if (match.Value.Name != null)
+                    result.Add((match.Value.Name, newRow.Name));
             }
             return result;
         }
@@ -304,7 +304,7 @@ namespace SQL_WPF_App
         /// </summary>
         private void CloseItem_Click(object sender, RoutedEventArgs e)
         {
-            if (!_model.isTableOpened())
+            if (!_model.IsTableOpened())
             {
                 MessageBox.Show("Таблиц не открыто", "Информация", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -393,7 +393,7 @@ namespace SQL_WPF_App
         /// </summary>
         private void RefreshData()
         {
-            if (!_model.isTableOpened()) return;
+            if (!_model.IsTableOpened()) return;
 
             try
             {
@@ -414,7 +414,7 @@ namespace SQL_WPF_App
         /// <returns>true, если таблица открыта; иначе false.</returns>
         private bool EnsureTableOpened()
         {
-            if (_model.isTableOpened()) return true;
+            if (_model.IsTableOpened()) return true;
             MessageBox.Show("Сначала откройте таблицу", "Предупреждение",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
