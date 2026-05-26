@@ -2,6 +2,7 @@
 using SQL_ConsoleApp.Commands;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -492,7 +493,7 @@ namespace SQL_ConsoleApp.Files
 
         private static bool? ParseLogical(string value)
         {
-            if (string.IsNullOrWhiteSpace(value)) return null;
+            if (string.IsNullOrWhiteSpace(value) || value.Trim().Equals("?")) return null;
             return value.Trim().ToUpperInvariant() is "T" or "Y" or "1" or "TRUE";
         }
 
@@ -506,8 +507,7 @@ namespace SQL_ConsoleApp.Files
                 return null;
 
             return DateTime.TryParseExact(trimmed, "yyyyMMdd",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out DateTime date) ? date : null;
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime date) ? date : null;
         }
 
         private static double? TryParseDouble(string value) =>

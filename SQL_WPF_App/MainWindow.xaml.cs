@@ -23,6 +23,13 @@ namespace SQL_WPF_App
         /// </summary>
         private void CreateItem_Click(object sender, RoutedEventArgs e)
         {
+            if (_model.IsTableOpened())
+            {
+                MessageBox.Show("Таблица уже открыта", "Предупреждение",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+                
             var form = new FormCreateTable();
             form.TableCreated += (tableName, rows) =>
             {

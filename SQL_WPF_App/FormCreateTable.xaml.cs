@@ -84,6 +84,7 @@ namespace SQL_WPF_App
                 IsChecked = notNull
             };
             var numPosition = CreatePositionControl();
+            numPosition.ValueChanged += NumPosition_ValueChanged;
 
             PlaceInGrid(rowPanel, txtName, ColName);
             PlaceInGrid(rowPanel, cmbType, ColType);
@@ -153,6 +154,7 @@ namespace SQL_WPF_App
             BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1)
         };
+
 
         /// <summary>Помещает элемент в указанную колонку Grid и добавляет его в children.</summary>
         private static void PlaceInGrid(Grid grid, UIElement element, int column)

@@ -72,20 +72,20 @@ namespace SQL_ConsoleApp.Files
         public static DbfHeader Create(RowDefinition[] rows)
         {
             var header = new DbfHeader();
-            bool hasMemo = false;
+            int memoCount = 0;
 
             foreach (var row in rows)
             {
-                if (hasMemo)
+                if (memoCount>1)
                     throw new Exception("Больше одного MEMO поля недопустимо!");
 
                 if (row.Type == 'M')
-                    hasMemo = true;
+                    memoCount++;
 
                 header.Fields.Add(CreateField(row));
             }
 
-            if (hasMemo) header.Version = 0x83;
+            if (memoCount==1) header.Version = 0x83;
             header.HeaderLength = CalculateHeaderLength(header.Fields.Count);
             header.RecordLength = CalculateRecordLength(header.Fields);
             header.RecordCount = 0;

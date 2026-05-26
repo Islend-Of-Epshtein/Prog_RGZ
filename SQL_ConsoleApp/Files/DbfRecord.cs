@@ -215,6 +215,7 @@ namespace SQL_ConsoleApp.Files
             // Если указан конкретный формат — используем строгий парсинг
             if (fromFormat != null)
             {
+                
                 return DateTime.TryParseExact(trimmed, fromFormat, CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out DateTime date)
                     ? date.ToString(toFormat)
